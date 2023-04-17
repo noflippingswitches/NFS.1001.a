@@ -20,11 +20,13 @@
 
 import json
 
+
 # writes dictionary to a json file
 def dictionary_to_json(python_dictionary, path_and_or_file_name_to_json):
     with open(path_and_or_file_name_to_json, "w") as outfile:
         # noinspection PyTypeChecker
         json.dump(python_dictionary, outfile)
+
 
 # english
 language_en = {
@@ -48,7 +50,12 @@ language_en = {
     "Please_wait_x_seconds": "Please wait 15 seconds",
     "Signal_Quality": "Signal Quality",
     "Channel": "Channel",
-    "Security": "Security"
+    "Security": "Security",
+    "Tempature": "Tempature",
+    "Take_Reading_Every": "Take Reading Every",
+    "Send_Readings_Every": "Send Readings Every",
+    "Minutes": "Minutes",
+    "Hours": "Hours"
 }
 dictionary_to_json(language_en, 'language_en.json')
 
@@ -74,7 +81,12 @@ language_zh = {
     "Please_wait_x_seconds": "请等待 15 秒",
     "Signal_Quality": "信号质量",
     "Channel": "频道",
-    "Security": "安全"
+    "Security": "安全",
+    "Tempature": "温",
+    "Take_Reading_Every": "进行测量各个",
+    "Send_Readings_Every": "发送测量每",
+    "Minutes": "分钟",
+    "Hours": "小时"
 }
 dictionary_to_json(language_zh, 'language_zh.json')
 
@@ -100,7 +112,12 @@ language_es = {
     "Please_wait_x_seconds": "Espere 15 segundos",
     "Signal_Quality": "Calidad de la señal",
     "Channel": "Canal",
-    "Security": "Seguridad"
+    "Security": "Seguridad",
+    "Tempature": "Temperatura",
+    "Take_Reading_Every": "Tomar lectura cada",
+    "Send_Readings_Every": "Enviar lecturas cada",
+    "Minutes": "Minutos",
+    "Hours": "Horas"
 }
 dictionary_to_json(language_es, 'language_es.json')
 
@@ -126,7 +143,12 @@ language_ar = {
     "Please_wait_x_seconds": "من فضلك انتظر 15 ثانية",
     "Signal_Quality": "جودة إشارات",
     "Channel": "قناة",
-    "Security": "حماية"
+    "Security": "حماية",
+    "Tempature": "درجة حرارة",
+    "Take_Reading_Every": "خذ قراءة كل",
+    "Send_Readings_Every": "إرسال قراءات كل",
+    "Minutes": "دقائق",
+    "Hours": "ساعات"
 }
 dictionary_to_json(language_ar, 'language_ar.json')
 
@@ -152,7 +174,12 @@ language_ja = {
     "Please_wait_x_seconds": "15 秒お待ちください",
     "Signal_Quality": "信号品質",
     "Channel": "チャネル",
-    "Security": "安全"
+    "Security": "安全",
+    "Tempature": "温度",
+    "Take_Reading_Every": "測定間隔",
+    "Send_Readings_Every": "送信間隔",
+    "Minutes": "分",
+    "Hours": "時間"
 }
 dictionary_to_json(language_ja, 'language_ja.json')
 
@@ -178,7 +205,12 @@ language_de = {
     "Please_wait_x_seconds": "Bitte warten Sie 15 Sekunden",
     "Signal_Quality": "Signalqualität",
     "Channel": "Kanal",
-    "Security": "Sicherheit"
+    "Security": "Sicherheit",
+    "Tempature": "Temperatur",
+    "Take_Reading_Every": "Lesen Sie jeden",
+    "Send_Readings_Every": "Messwerte senden alle",
+    "Minutes": "Protokoll",
+    "Hours": "stunden"
 }
 dictionary_to_json(language_de, 'language_de.json')
 
@@ -204,7 +236,12 @@ language_ru = {
     "Please_wait_x_seconds": "Пожалуйста, подождите 15 секунд",
     "Signal_Quality": "Качество сигнала",
     "Channel": "Канал",
-    "Security": "Безопасность"
+    "Security": "Безопасность",
+    "Tempature": "Температура",
+    "Take_Reading_Every": "Возьмите чтение каждый",
+    "Send_Readings_Every": "Отправляйте показания каждые",
+    "Minutes": "Минуты",
+    "Hours": "Часы"
 }
 dictionary_to_json(language_ru, 'language_ru.json')
 
@@ -230,7 +267,12 @@ language_hi = {
     "Please_wait_x_seconds": "कृपया 15 सेकंड प्रतीक्षा करें",
     "Signal_Quality": "सिग्नल की गुणवत्ता",
     "Channel": "चैनल",
-    "Security": "सुरक्षा"
+    "Security": "सुरक्षा",
+    "Tempature": "तापमान",
+    "Take_Reading_Every": "प्रत्येक पढ़ना लो",
+    "Send_Readings_Every": " रीडिंग हर भेजें",
+    "Minutes": "मिनट",
+    "Hours": "घंटे"
 }
 dictionary_to_json(language_hi, 'language_hi.json')
 
@@ -256,7 +298,12 @@ language_pt = {
     "Please_wait_x_seconds": "Aguarde 15 segundos",
     "Signal_Quality": "Qualidade do sinal",
     "Channel": "Canal",
-    "Security": "Segurança"
+    "Security": "Segurança",
+    "Tempature": "Temperatura",
+    "Take_Reading_Every": "Faça a leitura a cada",
+    "Send_Readings_Every": "Enviar leituras a cada",
+    "Minutes": "Minutos",
+    "Hours": "Horas"
 }
 dictionary_to_json(language_pt, 'language_pt.json')
 
@@ -282,10 +329,11 @@ language_fr = {
     "Please_wait_x_seconds": "Veuillez patienter 15 secondes",
     "Signal_Quality": "Qualidade do sinal",
     "Channel": "Canal",
-    "Security": "Segurança"
+    "Security": "Segurança",
+    "Tempature": "Température",
+    "Take_Reading_Every": "Prenez la lecture chaque",
+    "Send_Readings_Every": "Envoyer des lectures chaque",
+    "Minutes": "Minutes",
+    "Hours": "Heures"
 }
 dictionary_to_json(language_fr, 'language_fr.json')
-
-
-
-
