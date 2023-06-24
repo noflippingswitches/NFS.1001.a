@@ -19,10 +19,6 @@
 # SOFTWARE.
 
 
-# TODO_LIST
-# Write catch for temps greater or less than the temp sensor can read, make sure its 10deg past range
-
-
 import time
 # get time when code starts
 start_time_ticks_ms = time.ticks_ms()
@@ -45,6 +41,12 @@ from micropython import const
 # noinspection PyPep8Naming
 class ds18b20_85C_Exception(Exception):
     """Raised when the ds18b20 value is 85"""
+    pass
+
+
+# noinspection PyPep8Naming
+class ds18b20_NEG_55C_POS_125C_Exception(Exception):
+    """Raised when the ds18b20 value is less than NEG_55C or greaterthan POS_125C"""
     pass
 
 
@@ -128,6 +130,7 @@ def ds18b20(ds18b20_serial_number):
         ds18b20rom[i] = int(ds18b20_serial_number[i * 2:i * 2 + 2], 16)
     # Check for error in python import when reading temp and handle temp sensor 85C
     ds18b20_85C_Exception_count = 1
+    ds18b20_NEG_55C_POS_125C_Exception_count = 1
     ds18b20_not_int_float_Exception_count = 1
     any_exception_count = 1
     while True:
@@ -137,7 +140,9 @@ def ds18b20(ds18b20_serial_number):
             time.sleep_ms(1000)
             temp = ds_sensors.read_temp(ds18b20rom)
             if temp == 85:
-                raise ds18b20_85C_Exception('Temperature is 85C, are we sure this is the temp or is it a code from sensor')
+                raise ds18b20_85C_Exception('Temperature is 85C, are we sure this is the temp or is it a code from sensor, try reading again')
+            if -55 < temp < 125:
+                raise ds18b20_NEG_55C_POS_125C_Exception('Temperature is less than NEG_55C or greater than POS_125C, try reading again')
             if not isinstance(temp, (int, float)):
                 raise ds18b20_not_int_float_Exception('Temperature is not an integer or float')
             break
@@ -148,12 +153,19 @@ def ds18b20(ds18b20_serial_number):
                 temp = 85
                 break
             ds18b20_85C_Exception_count += 1
+        except ds18b20_NEG_55C_POS_125C_Exception as e:
+            print('Error: {0}'.format(e))
+            print('attempt {0} of 10'.format(ds18b20_NEG_55C_POS_125C_Exception_count))
+            if ds18b20_NEG_55C_POS_125C_Exception_count == 10:
+                temp = 998
+                break
+            ds18b20_85C_Exception_count += 1
         except ds18b20_not_int_float_Exception as e:
             print('Error: {0}'.format(e))
             print('attempt {0} of 10'.format(ds18b20_not_int_float_Exception_count))
 
             if ds18b20_not_int_float_Exception_count == 10:
-                temp = 998
+                temp = 997
                 break
             ds18b20_not_int_float_Exception_count += 1
         except Exception as e:
@@ -162,7 +174,7 @@ def ds18b20(ds18b20_serial_number):
             print('attempt {0} of 10'.format(any_exception_count))
             if any_exception_count == 10:
                 # set temp error code
-                temp = 997
+                temp = 996
                 break
             any_exception_count += 1
     # set pin1 low/(-)
@@ -489,6 +501,12 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
         # calculate corrected time to sleep
         corrected_time_to_sleep = time_to_sleep - diff_start_stop
 
+        # disable pull-up(s) to stop current leakage before sleep
+        # noinspection PyTypeChecker
+        station_or_access_point.init(pull=None)
+        # noinspection PyTypeChecker
+        factory_reset.init(pull=None)
+
         # ya cant sleep less than nothin!
         # you cant go back in time!
         # there is no foo.enable(time_machine)
@@ -543,6 +561,12 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
             # calculate corrected time to sleep
             corrected_time_to_sleep = time_to_sleep - diff_start_stop
 
+            # disable pull-up(s) to stop current leakage before sleep
+            # noinspection PyTypeChecker
+            station_or_access_point.init(pull=None)
+            # noinspection PyTypeChecker
+            factory_reset.init(pull=None)
+
             # ya cant sleep less than nothin!
             # you cant go back in time!
             # there is no foo.enable(time_machine)
@@ -585,7 +609,7 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
             # how many attemps to connect to this network/ssid. will try # of times if good conection is lost NOTE: call them one at a time else jams up
             wifi_station.config(hostname=device_settings_dictionary['unique_id'])
-            wifi_station.config(reconnects=15)
+            wifi_station.config(reconnects=5)
 
             # NOTE: anoying you cannot unassign static values for ifconfig, you must reset device. rather try dhcp networks first.
             # NOTE: if a ssid had a password and now does not the last 5 values are cashed. user must change the ssid for network on thier router/device! Gerrr.
@@ -594,10 +618,20 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
             if not wifi_station.isconnected():
                 # if no Wi-Fi is declared by user then sleep for max time to save batt until user sets a value
                 if 'wifi_ssid' not in wifi_settings_dictionary['known_wifi']:
+
+                    # disable pull-up(s) to stop current leakage before sleep
+                    # noinspection PyTypeChecker
+                    station_or_access_point.init(pull=None)
+                    # noinspection PyTypeChecker
+                    factory_reset.init(pull=None)
+
                     # garbage collection before deep sleap
                     gc.collect()
                     machine.deepsleep()
                 else:
+                    # IMPORTANT! feed the watchdog before trying to connect to Wi-Fi ssid
+                    wdt.feed()  # feed the watchdog timmer
+
                     if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
                         wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'])
                     else:
@@ -609,7 +643,6 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                     # get status after while loop finishes
                     status = wifi_connection_status(wifi_station.status())
                     # print(str(status))
-                    wifi_station.disconnect()
 
                     # IMPORTANT! feed the watchdog after trying to connect to Wi-Fi ssid
                     wdt.feed()  # feed the watchdog timmer
@@ -626,6 +659,8 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
                     # garbage collection before deep sleap
                     gc.collect()
+                    # feed the watchdog timmer
+                    wdt.feed()
 
                     # calculate time to sleap
                     time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
@@ -637,7 +672,11 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                     # calculate corrected time to sleep
                     corrected_time_to_sleep = time_to_sleep - diff_start_stop
 
-                    wdt.feed()  # feed the watchdog timmer
+                    # disable pull-up(s) to stop current leakage before sleep
+                    # noinspection PyTypeChecker
+                    station_or_access_point.init(pull=None)
+                    # noinspection PyTypeChecker
+                    factory_reset.init(pull=None)
 
                     # ya cant sleep less than nothin!
                     # you cant go back in time!
@@ -657,6 +696,8 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
                     # garbage collection before deep sleap
                     gc.collect()
+                    # feed the watchdog timmer
+                    wdt.feed()
 
                     # calculate time to sleap
                     time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
@@ -668,6 +709,12 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                     # calculate corrected time to sleep
                     corrected_time_to_sleep = time_to_sleep - diff_start_stop
 
+                    # disable pull-up(s) to stop current leakage before sleep
+                    # noinspection PyTypeChecker
+                    station_or_access_point.init(pull=None)
+                    # noinspection PyTypeChecker
+                    factory_reset.init(pull=None)
+
                     # ya cant sleep less than nothin!
                     # you cant go back in time!
                     # there is no foo.enable(time_machine)
@@ -676,52 +723,154 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                     else:
                         machine.deepsleep(corrected_time_to_sleep)
 
-            # We have connected to the Wi-Fi, do stuff
-            if wifi_station.isconnected():
-                # get connection info
-                ifconfig = wifi_station.ifconfig()
-                hostname = wifi_station.config('hostname')
-                ssid = wifi_station.config('ssid')
-                # print('Connected to: {0}'.format(ssid))
+            # We have connected to the Wi-Fi, MQTT stuff
+                    # We have connected to the wifi, do stuff
+                    if wifi_station.isconnected():
+                        # get connection info
+                        ifconfig = wifi_station.ifconfig()
+                        ip_address_html = ifconfig[0]
+                        subnet_mask_html = ifconfig[1]
+                        gateway_server_html = ifconfig[2]
+                        dns_server_html = ifconfig[3]
+                        hostname_html = wifi_station.config('hostname')
+                        ssid_html = wifi_station.config('ssid')
+                        # print('Connected to: {0}'.format(ssid))
 
-                data_out_dictionary = {
-                    device_settings_dictionary['unique_id']: {
-                        "sensor": {
-                            "tempC": rtc_memory_reversed_list,
-                            "record_data_interval_ms": int(wifi_settings_dictionary['record_data_interval_ms']),
-                            "send_data_interval_min": int(wifi_settings_dictionary['send_data_interval_min'])
-                        },
-                        "battery": {
-                            "volts": batt_result[0],
-                            "percentage": batt_result[1]
-                        },
-                        "device": {
-                            "device": device_settings_dictionary['device'],
-                            "sensor_id": device_settings_dictionary['ds18b20_sn']
+                        data_out_dictionary = {
+                            device_settings_dictionary['unique_id']: {
+                                "sensor": {
+                                    "tempC": rtc_memory_reversed_list,
+                                    "record_data_interval_ms": int(wifi_settings_dictionary['record_data_interval_ms']),
+                                    "send_data_interval_min": int(wifi_settings_dictionary['send_data_interval_min'])
+                                },
+                                "battery": {
+                                    "volts": batt_result[0],
+                                    "percentage": batt_result[1]
+                                },
+                                "device": {
+                                    "device": device_settings_dictionary['device'],
+                                    "sensor_id": device_settings_dictionary['ds18b20_sn']
+                                }
+
+                            }
                         }
 
-                    }
-                }
+                        data_out_json = json.dumps(data_out_dictionary)
 
-                data_out_json = json.dumps(data_out_dictionary)
+                        # mqtt
+                        client_id = hostname_html
+                        server = wifi_settings_dictionary['mqtt_url']
+                        if server == 'noflippingswitches.com' or server == 'no-fs.com':
+                            port = 8883
+                            keepalive = 60
+                            ssl = True
+                            user = None
+                            password = None
+                        else:
+                            port = wifi_settings_dictionary['mqtt_port']
+                            keepalive = 60
+                            ssl = wifi_settings_dictionary['mqtt_ssl']
+                            user = wifi_settings_dictionary['mqtt_username']
+                            if user == '':
+                                user = None
+                            password = wifi_settings_dictionary['mqtt_password']
+                            if password == '':
+                                password = None
 
-                # mqtt
-                client_id = hostname
-                server = 'sun-tmp-mqtt.no-fs.com'
-                port = 8883
-                user = 'admin'
-                password = 'J61X0vog851odYpAqlEfr1gI8ytoHVZQSF9p'
-                mqttc = umqtt.simple.MQTTClient(client_id, server, port, user, password,  keepalive=60, ssl=True)
-                mqttc.connect(clean_session=True)
-                # print('mqttc.ping(): ', mqttc.ping())
-                topic_byte = ('noflippingswitches/sensor/' + hostname).encode()
-                msg_byte = data_out_json.encode()
-                mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
-                mqttc.disconnect()
-                wifi_station.disconnect()
-                wifi_station.active(False)
+                        mqttc = umqtt.simple.MQTTClient(client_id, server, port, user, password, keepalive, ssl)
 
-                # create checks for disconnect on qos=1, so we can save the msg and keep loggin temps!
+                        while_loop_counter = 1
+                        while True:
+                            # noinspection PyBroadException
+                            try:
+                                mqttc.connect(clean_session=True)
+                                topic_byte = ('noflippingswitches/sensor/' + hostname_html).encode()
+                                msg_byte = data_out_json.encode()
+                                mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
+                                mqttc.disconnect()
+                                break
+                            except Exception as e:
+                                if while_loop_counter == 5:
+                                    if rtc_read_memory_len < 1920:
+                                        # convert rtc_memory_list to a MessagePack serialization and write it to rtc memory
+                                        rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
+
+                                        # write rtc_memory_list_bytes to rtc memory
+                                        # noinspection PyArgumentList
+                                        machine.RTC().memory(rtc_memory_list_bytes)
+
+                                        # garbage collection before deep sleap
+                                        gc.collect()
+                                        # feed the watchdog timmer
+                                        wdt.feed()
+
+                                        # calculate time to sleap
+                                        time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
+
+                                        # calculate time to offset sleap by how long it took to run code
+                                        stop_time_ticks_ms = time.ticks_ms()
+                                        diff_start_stop = time.ticks_diff(stop_time_ticks_ms, start_time_ticks_ms)
+
+                                        # calculate corrected time to sleep
+                                        corrected_time_to_sleep = time_to_sleep - diff_start_stop
+
+                                        # disable pull-up(s) to stop current leakage before sleep
+                                        # noinspection PyTypeChecker
+                                        station_or_access_point.init(pull=None)
+                                        # noinspection PyTypeChecker
+                                        factory_reset.init(pull=None)
+
+                                        # ya cant sleep less than nothin!
+                                        # you cant go back in time!
+                                        # there is no foo.enable(time_machine)
+                                        if corrected_time_to_sleep < 1:
+                                            machine.deepsleep(100)
+                                        else:
+                                            machine.deepsleep(corrected_time_to_sleep)
+
+                                    else:
+                                        del rtc_memory_list[0]
+                                        rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
+
+                                        # write rtc_memory_list_bytes to rtc memory
+                                        # noinspection PyArgumentList
+                                        machine.RTC().memory(rtc_memory_list_bytes)
+
+                                        # garbage collection before deep sleap
+                                        gc.collect()
+                                        # feed the watchdog timmer
+                                        wdt.feed()
+
+                                        # calculate time to sleap
+                                        time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
+
+                                        # calculate time to offset sleap by how long it took to run code
+                                        stop_time_ticks_ms = time.ticks_ms()
+                                        diff_start_stop = time.ticks_diff(stop_time_ticks_ms, start_time_ticks_ms)
+
+                                        # calculate corrected time to sleep
+                                        corrected_time_to_sleep = time_to_sleep - diff_start_stop
+
+                                        # disable pull-up(s) to stop current leakage before sleep
+                                        # noinspection PyTypeChecker
+                                        station_or_access_point.init(pull=None)
+                                        # noinspection PyTypeChecker
+                                        factory_reset.init(pull=None)
+
+                                        # ya cant sleep less than nothin!
+                                        # you cant go back in time!
+                                        # there is no foo.enable(time_machine)
+                                        if corrected_time_to_sleep < 1:
+                                            machine.deepsleep(100)
+                                        else:
+                                            machine.deepsleep(corrected_time_to_sleep)
+                                    break
+                                while_loop_counter += 1
+
+                    wifi_station.disconnect()
+                    wifi_station.active(False)
+                    # give wifi time to go down
+                    time.sleep_ms(250)
 
                 # clear rtc memory
                 # noinspection PyArgumentList
@@ -729,6 +878,8 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
                 # garbage collection before deep sleap
                 gc.collect()
+                # feed the watchdog timmer
+                wdt.feed()
 
                 # calculate time to sleap
                 time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
@@ -740,7 +891,11 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                 # calculate corrected time to sleep
                 corrected_time_to_sleep = time_to_sleep - diff_start_stop
 
-                wdt.feed()  # feed the watchdog timmer
+                # disable pull-up(s) to stop current leakage before sleep
+                # noinspection PyTypeChecker
+                station_or_access_point.init(pull=None)
+                # noinspection PyTypeChecker
+                factory_reset.init(pull=None)
 
                 # ya cant sleep less than nothin!
                 # you cant go back in time!
@@ -938,8 +1093,6 @@ else:  # access_point
 
     while ap.active() is False:
         pass
-    # IMPORTANT! feed the watchdog after trying to setup_ ap
-    wdt.feed()  # feed the watchdog timmer
 
     print('AP creation successful and Broadcasting')
     print(ap.ifconfig())
