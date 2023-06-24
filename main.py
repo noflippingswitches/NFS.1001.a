@@ -791,6 +791,10 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                                 break
                             except Exception as e:
                                 if while_loop_counter == 5:
+                                    wifi_station.disconnect()
+                                    wifi_station.active(False)
+                                    # give wifi time to go down
+                                    time.sleep_ms(250)
                                     if rtc_read_memory_len < 1920:
                                         # convert rtc_memory_list to a MessagePack serialization and write it to rtc memory
                                         rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
