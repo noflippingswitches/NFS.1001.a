@@ -21,7 +21,6 @@
 
 # TODO_LIST
 # Write catch for temps greater or less than the temp sensor can read, make sure its 10deg past range
-# write code for temp sensor to not take reading if volts less than 3
 
 
 import time
@@ -29,7 +28,7 @@ import time
 start_time_ticks_ms = time.ticks_ms()
 import usocket as socket
 import umqtt.simple
-import esp32
+# import esp32
 import machine
 import network
 import onewire
@@ -42,13 +41,7 @@ import umsgpack
 from micropython import const
 
 
-
-# garbage collection
-gc.collect()
-
-
 # [Exceptions]
-# ----------------------------------------------------------------------------------------------------------------------
 # noinspection PyPep8Naming
 class ds18b20_85C_Exception(Exception):
     """Raised when the ds18b20 value is 85"""
@@ -61,133 +54,7 @@ class ds18b20_not_int_float_Exception(Exception):
     pass
 
 
-# TEMPORARY
-# os.listdir()
-# os.remove('device_settings.json')
-# os.remove('wifi_settings.json')
-# os.remove('min_max_specifications.json')
-
-
 # [ Functions ]
-# ----------------------------------------------------------------------------------------------------------------------
-# loging - keep to less than 100 lines so ram is not overflowed - unit should be restarted after sending data
-def logging(text):
-    global log
-    if len(log) >= 100:
-        del log[:1]
-    log.append(text)  # add text to end of list
-    return log
-
-
-def print_log():
-    global log
-    print(' ')
-    print(' ')
-    print(*log, sep="\n")
-    print(' ')
-    print(' ')
-
-
-# Callback functions for device change of states
-# noinspection PyUnusedLocal
-def callback_jumperpin(p):
-    global machine_reset
-    global station_or_access_point_startup_value
-
-    # set last_time_ticks_ms value
-    last_time_ticks_ms = time.ticks_ms()
-
-    while station_or_access_point.value() != station_or_access_point_startup_value:
-        now_time_ticks_ms = time.ticks_ms()
-        diff = time.ticks_diff(now_time_ticks_ms, last_time_ticks_ms)
-        if diff > 2000:
-            station_or_access_point_startup_value = station_or_access_point.value()
-            if station_or_access_point_startup_value == 1:  # station
-                mode = 'station'
-            else:  # access_point
-                mode = 'access point'
-            logging(' ')
-            logging('Changed to {0} mode'.format(mode))
-            logging(' ')
-            logging('Machine will reset')
-            print_log()
-            machine.reset()
-            break
-
-
-# noinspection PyUnusedLocal
-def callback_intermittent_button(p):
-    # set last_time_ticks_ms value
-    last_time_ticks_ms = time.ticks_ms()
-
-    gpio_pin_for_led = machine.Pin(Constant_onboard_led_gpio_pin, machine.Pin.OUT)
-    # make sure led off, set pin low/(-)
-    gpio_pin_for_led.value(0)
-
-    # adjust time to blink at 1min mark, also filter short presses
-    time.sleep_ms(1000)
-    # while the button is pressed blink led every second
-    while intermittent_button.value() == 0:
-        # set pin high/(+)
-        gpio_pin_for_led.value(1)
-        time.sleep_ms(200)
-        # set pin low/(-)
-        gpio_pin_for_led.value(0)
-        time.sleep_ms(800)
-
-    # Turn led off, set pin low/(-)
-    gpio_pin_for_led.value(0)
-
-    now_time_ticks_ms = time.ticks_ms()
-    diff = time.ticks_diff(now_time_ticks_ms, last_time_ticks_ms)
-
-    # button held for 3 seconds, machine reset
-    if 3500 < diff < 9500:
-        blinks = 0
-        while blinks < 4:
-            # set pin high/(+)
-            gpio_pin_for_led.value(1)
-            time.sleep_ms(20)
-            # set pin low/(-)
-            gpio_pin_for_led.value(0)
-            time.sleep_ms(80)
-            blinks += 1
-        logging(' ')
-        logging('Reset button held for 3sec')
-        logging(' ')
-        logging('Machine will reset')
-        print_log()
-        machine.reset()
-
-    # button held for 10 seconds, factory reset
-    elif diff >= 10500:
-        blinks = 0
-        while blinks < 4:
-            # set pin high/(+)
-            gpio_pin_for_led.value(1)
-            time.sleep_ms(20)
-            # set pin low/(-)
-            gpio_pin_for_led.value(0)
-            time.sleep_ms(80)
-            blinks += 1
-        logging(' ')
-        logging('Reset button held for 10sec')
-        logging('Machine will factory reset')
-
-        # noinspection PyShadowingNames
-        try:
-            os.remove('wifi_settings.json')
-            logging('removed wifi_settings.json')
-        except Exception as e:
-            logging('Error: {0}'.format(e))
-            logging('Unable to remove file: wifi_settings.json')
-
-        logging(' ')
-        logging('Machine will reset')
-        print_log()
-        machine.reset()
-
-
 # returns json as a python dictionary
 def json_to_dictionary(path_and_or_file_name_to_json):
     with open(path_and_or_file_name_to_json, 'r') as openfile:
@@ -200,38 +67,6 @@ def dictionary_to_json(python_dictionary, path_and_or_file_name_to_json):
     with open(path_and_or_file_name_to_json, "w") as outfile:
         # noinspection PyTypeChecker
         json.dump(python_dictionary, outfile)
-
-
-# Flash Filesystem Storage (Size, Used, Available, Use%)
-def df():
-    filesystem_info_tuple = os.statvfs('//')
-    # https://docs.micropython.org/en/v1.19.1/library/os.html?highlight=os%20statvfs#os.statvfs
-    # filesystem_info_tuple[0] = f_bsize (file system block size)
-    # filesystem_info_tuple[1] = f_frsize (fragment size)
-    # filesystem_info_tuple[2] = f_blocks (size of fs in f_frsize units)
-    # filesystem_info_tuple[3] = f_bfree (number of free blocks)
-    # filesystem_info_tuple[4] = f_bavail (number of free blocks for unprivileged users)
-    # filesystem_info_tuple[5] = f_files (number of inodes)
-    # filesystem_info_tuple[6] = f_ffree (number of free inodes)
-    # filesystem_info_tuple[7] = f_favail (number of free inodes for unprivileged users)
-    # filesystem_info_tuple[8] = f_flag (mount flags)
-    # filesystem_info_tuple[9] = f_namemax (maximum filename length)
-
-    size_megabytes = (filesystem_info_tuple[2] * filesystem_info_tuple[0]) / 1048576
-    used_megabytes = ((filesystem_info_tuple[2] - filesystem_info_tuple[3]) * filesystem_info_tuple[1]) / 1048576
-    available_megabytes = (filesystem_info_tuple[1] * filesystem_info_tuple[4]) / 1048576
-    use_percentage = float("{:.2f}".format(((((filesystem_info_tuple[2] - filesystem_info_tuple[3]) * filesystem_info_tuple[1]) / (filesystem_info_tuple[2] * filesystem_info_tuple[0])) * 100)))
-
-    return size_megabytes, used_megabytes, available_megabytes, use_percentage
-
-
-# Memory (Size, Used, Available, Use%)
-def dm():
-    used_megabytes = gc.mem_alloc() / 1048576
-    available_megabytes = gc.mem_free() / 1048576
-    size_megabytes = used_megabytes + available_megabytes
-    use_percentage = float("{:.2f}".format((used_megabytes/size_megabytes) * 100))
-    return size_megabytes, used_megabytes, available_megabytes, use_percentage
 
 
 # Battery (Volts, Remaining%)
@@ -287,7 +122,7 @@ def ds18b20(ds18b20_serial_number):
     ds18b20_one_wire = machine.Pin(Constant_ds18b20_one_wire_pin)
     # define sensors object useing library
     ds_sensors = ds18x20.DS18X20(onewire.OneWire(ds18b20_one_wire))
-    # convert human readable serial number back into bytearray
+    # convert human-readable serial number back into bytearray
     ds18b20rom = bytearray(8)
     for i in range(8):
         ds18b20rom[i] = int(ds18b20_serial_number[i * 2:i * 2 + 2], 16)
@@ -296,7 +131,7 @@ def ds18b20(ds18b20_serial_number):
     ds18b20_not_int_float_Exception_count = 1
     any_exception_count = 1
     while True:
-        # noinspection PyShadowingNames
+        # noinspection PyShadowingNames,PyUnusedLocal,PyBroadException
         try:
             ds_sensors.convert_temp()
             time.sleep_ms(1000)
@@ -307,24 +142,24 @@ def ds18b20(ds18b20_serial_number):
                 raise ds18b20_not_int_float_Exception('Temperature is not an integer or float')
             break
         except ds18b20_85C_Exception as e:
-            logging('Error: {0}'.format(e))
-            logging('attempt {0} of 10'.format(ds18b20_85C_Exception_count))
+            print('Error: {0}'.format(e))
+            print('attempt {0} of 10'.format(ds18b20_85C_Exception_count))
             if ds18b20_85C_Exception_count == 10:
                 temp = 85
                 break
             ds18b20_85C_Exception_count += 1
         except ds18b20_not_int_float_Exception as e:
-            logging('Error: {0}'.format(e))
-            logging('attempt {0} of 10'.format(ds18b20_not_int_float_Exception_count))
+            print('Error: {0}'.format(e))
+            print('attempt {0} of 10'.format(ds18b20_not_int_float_Exception_count))
 
             if ds18b20_not_int_float_Exception_count == 10:
                 temp = 998
                 break
             ds18b20_not_int_float_Exception_count += 1
         except Exception as e:
-            logging('Error: {0}'.format(e))
-            logging('unable to get temperature')
-            logging('attempt {0} of 10'.format(any_exception_count))
+            print('Error: {0}'.format(e))
+            print('unable to get temperature')
+            print('attempt {0} of 10'.format(any_exception_count))
             if any_exception_count == 10:
                 # set temp error code
                 temp = 997
@@ -357,7 +192,7 @@ def wifi_connection_status(stat):
         return 'STAT_UNKNOWN: unknown return value of {0}'.format(stat)
 
 
-# control the blinks of a led
+# control the blinks of led
 def led_blink(pin, blinks, interval_on, interval_off, interval_before_sets, interval_after_sets):
     # establish pin
     gpio_pin_for_led = machine.Pin(pin, machine.Pin.OUT)
@@ -373,40 +208,39 @@ def led_blink(pin, blinks, interval_on, interval_off, interval_before_sets, inte
     time.sleep_ms(interval_after_sets)
 
 
-def wifi_client_scan():  # returns best_channel, wifi_client_scan_formatted
-    # scan for other wireless networks so we can calculate best channel to use
-    # must enable network.STA_IF, station aka client that connects to upstream WiFi's
+def wifi_client_scan():  # returns wifi_client_scan_formatted
+    # scan for other wireless networks, so we can calculate best channel to use
+    # must enable network.STA_IF, station aka client that connects to upstream Wi-Fi's
     wifi_client = network.WLAN(network.STA_IF)
     # Make sure wifi_client is not active before trying to connect (if no True/False given it will output current state)
     if wifi_client.active():
-        # Make sure we are not connected to a wifi network
+        # Make sure we are not connected to a wi-fi network
         if wifi_client.isconnected():
             wifi_client.disconnect()
-            # give wifi time to disconnect
+            # give wi-fi time to disconnect
             time.sleep_ms(250)
         wifi_client.active(False)
-        # give wifi time to go down
+        # give wi-fi time to go down
         time.sleep_ms(250)
 
     wifi_client.active(True)
-    # give wifi time to come up
+    # give wi-fi time to come up
     time.sleep_ms(250)
     # noinspection PyShadowingNames
     try:
         wifi_client_scan_raw = wifi_client.scan()
         # disconnect after scan
         wifi_client.active(False)
-        # give wifi time to go down
+        # give wi-fi time to go down
         time.sleep_ms(250)
         if wifi_client.active():
-            # Make sure we are not connected to a wifi network
+            # Make sure we are not connected to a wi-fi network
             wifi_client.active(False)
-        # give wifi time to go down
+        # give wi-fi time to go down
         time.sleep_ms(250)
     except Exception as e:
-        logging('Error: {0}'.format(e))
-        logging('wifi_client_scan_raw')
-        print_log()
+        print('Error: {0}'.format(e))
+        print('wifi_client_scan_raw')
         return False
 
     # format wifi_client_scan_raw, a list containing tuples, some containing binary form, into something human-readable
@@ -444,107 +278,61 @@ def wifi_client_scan():  # returns best_channel, wifi_client_scan_formatted
 
 
 # [Static]
-# ----------------------------------------------------------------------------------------------------------------------
 # Battery - Min and Max voltage range
-Constant_battery_min_voltage = const(3.0)
-Constant_battery_max_voltage = const(3.3)
+Constant_battery_min_voltage = const(3.025)
+Constant_battery_max_voltage = const(3.425)
 # Battery - Pin used to supply gpio (+) voltage to voltage divider resister 1.1kohms
-Constant_batt_gpio_pos_volts_supply_pin = const(6)
+Constant_batt_gpio_pos_volts_supply_pin = const(11)
 # Battery - Pin used for taking analog voltage
 Constant_adc_gpio_read_batt_voltage_pin = const(4)
 
 # ds18b20 temp sensor - Pin used to supply gpio (+) voltage to temperature sensor
-Constant_ds18b20_gpio_pos_pin = const(7)
+Constant_ds18b20_gpio_pos_pin = const(5)
 # ds18b20 temp sensor - Pin used to communicate with one wire ds18b20 temperature sensor
-Constant_ds18b20_one_wire_pin = const(5)
+Constant_ds18b20_one_wire_pin = const(3)
 
 # onboard led - pin used to turn on and off the onboard led
 Constant_onboard_led_gpio_pin = const(15)
 
-
-# Jumper pin  (station/access point) mode - Pin input used to decided what mode selected
+# Jumper pin  (station 0/access point 1) mode - Pin input used to decided what mode selected
 Constant_jumper_station_or_access_point_pin = const(16)
 
 # Intermittent button pin
 Constant_intermittent_button_pin = const(0)
 
 # [Global]
-# ----------------------------------------------------------------------------------------------------------------------
-# Log list
-log = []
-# Jumper pin detect if in station or access point mode, we have to define this here because if we callback outside of a async function this will fail
+# Jumper pin detect if in station or access point mode
 station_or_access_point = machine.Pin(Constant_jumper_station_or_access_point_pin, machine.Pin.IN, machine.Pin.PULL_UP)
 # needs time to settle
 time.sleep_ms(50)
 station_or_access_point_startup_value = station_or_access_point.value()
 
-# Intermittent button (0, boot, flash etc) located on side of unit
-# used to wake from deep sleap (tap/hold down for less than 3 seconds)
-# restart (hold for more than 3 seconds and less than 10 seconds)
-# factory reset (hold for more than 10 seconds)
-# we have to define this here because of callback outside of main async function when async used
-# noinspection PyArgumentList
-intermittent_button = machine.Pin(Constant_intermittent_button_pin, machine.Pin.IN, machine.Pin.PULL_UP, hold=True)  # Output-configured RTC pins will also retain their output direction and level in deep-sleep if pad hold is enabled with the hold=True
-# TO_DO https://docs.micropython.org/en/latest/esp32/quickref.html
-
-
-# wake from deepsleap
-# esp32.wake_on_ext1(pins = (station_or_access_point, intermittent_button), level = esp32.WAKEUP_ALL_LOW)   #initializing ext1
-# esp32.wake_on_ext0(pin = intermittent_button, level = esp32.WAKEUP_ALL_LOW)  #initializing wake up
-
-
-# store machine_reset state to act on
-machine_reset = False
-
-# [ Callbacks ]
-# trigger if station/access point jumper switches state
-station_or_access_point.irq(trigger=machine.Pin.IRQ_RISING | machine.Pin.IRQ_FALLING, handler=callback_jumperpin)
-
-# trigger if intermittent_button switches state
-intermittent_button.irq(trigger=machine.Pin.IRQ_FALLING, handler=callback_intermittent_button)
+# Intermittent button pin detect if pressed for factory reset of device
+factory_reset = machine.Pin(Constant_intermittent_button_pin, machine.Pin.IN, machine.Pin.PULL_UP)
+# needs time to settle
+time.sleep_ms(50)
+factory_reset_startup_value = factory_reset.value()  # 0 pressed, 1 released
 
 
 # [START]
-# ----------------------------------------------------------------------------------------------------------------------
-# watchdog timmer, The WDT is used to restart the system when the application crashes and ends up into a non recoverable state. Once started it cannot be stopped or reconfigured in any way. After enabling, the application must “feed” the watchdog periodically to prevent it from expiring and resetting the system.
-# use this line to over ride at start in REPL wdt = machine.WDT(timeout=6660000)
-wdt = machine.WDT(timeout=99960000)  # (id=0, timeout=5000) enable it with a timeout of 60s
+# print('NFS - starting the machine')
 
-# time.sleep_ms(5000)
-
-# quick blink led everytime device starts
-led_blink(Constant_onboard_led_gpio_pin, 1, 20, 0, 0, 0)  # (pin, blinks, interval_on, interval_off, interval_before_sets, interval_after_sets)
-
-logging('NFS - starting the machine')
-
-# Get reason for last reset
-reset_cause_int = machine.reset_cause()
-reset_cause_str = "UNKNOWN_RESET"
-if reset_cause_int == machine.PWRON_RESET:  # machine.PWRON_RESET Returns int 1
-    reset_cause_str = "PWRON_RESET"
-if reset_cause_int == machine.HARD_RESET:  # machine.HARD_RESET Returns int 2
-    reset_cause_str = "HARD_RESET"
-if reset_cause_int == machine.WDT_RESET:  # machine.WDT_RESET Returns int 3
-    reset_cause_str = "WDT_RESET"
-if reset_cause_int == machine.DEEPSLEEP_RESET:  # machine.DEEPSLEEP_RESET Returns int 4
-    reset_cause_str = "DEEPSLEEP_RESET"
-if reset_cause_int == machine.SOFT_RESET:  # machine.SOFT_RESET Returns int 5
-    reset_cause_str = "SOFT_RESET"
-logging('Machine last reset cause: {0}'.format(reset_cause_str))
+# uncomment when working on code. Adds delay, so we have time to work with the IDE
+time.sleep_ms(2000)
 
 # Load device_settings.json to Python dictionary, Else create them
 try:
     device_settings_dictionary = json_to_dictionary('device_settings.json')
-    logging('Loaded device_settings.json')
+    # print('Loaded device_settings.json')
 except Exception as e:
-    logging(' ')
-    logging('Error: {0}'.format(e))
-    logging('Unable to open file: device_settings.json')
-    logging('cetch_all: try to delete device_settings.json if it cant be opened')
+    print(' ')
+    print('Error: {0}'.format(e))
+    print('Unable to open file: device_settings.json')
+    print('cetch_all: try to delete device_settings.json if it cant be opened')
     try:
         os.remove('device_settings.json')
     except Exception as e:
-        logging('Error: {0}'.format(e))
+        print('Error: {0}'.format(e))
 
     import hashlib
 
@@ -580,17 +368,16 @@ except Exception as e:
     # set pin1 low/(-)
     gpio_pin_pos_volt_supply_for_ds18b20_x1.value(0)
 
-    # convert bytearray into a human readable serial number
+    # convert bytearray into a human-readable serial number
     try:
         ds18b20_sn = ''.join('%02X' % i for i in iter(sensorIDs[0]))
     except Exception as e:
-        logging(' ')
-        logging('Error: {0}'.format(e))
-        logging('Unable convert bytearray into a human readable serial number')
-        logging('Make sure ds18b20 is connected and not broken ')
-        logging('ds18b20_sn set to False')
-        logging(' ')
-        print_log()
+        print(' ')
+        print('Error: {0}'.format(e))
+        print('Unable convert bytearray into a human-readable serial number')
+        print('Make sure ds18b20 is connected and not broken')
+        print('ds18b20_sn set to False')
+        print(' ')
         ds18b20_sn = False
 
     device_settings_dictionary = {
@@ -603,81 +390,79 @@ except Exception as e:
         "hash_unique_id": hash_unique_id
     }
     dictionary_to_json(device_settings_dictionary, 'device_settings.json')
-    logging('Created device_settings.json')
-    logging(' ')
-    logging('Machine will reset')
-    print_log()
+    print('Created device_settings.json')
+    print(' ')
+    print('Machine will reset')
     machine.reset()
-
 
 # Load wifi_settings.json to Python dictionary, Else create it
 try:
     wifi_settings_dictionary = json_to_dictionary('wifi_settings.json')
-    logging('Loaded wifi_settings.json')
+    # print('Loaded wifi_settings.json')
 except Exception as e:
-    logging(' ')
-    logging('Error: {0}'.format(e))
-    logging('Unable to open file: wifi_settings.json')
-    logging('cetch_all: try to delete wifi_settings.json if it cant be opened')
+    print(' ')
+    print('Error: {0}'.format(e))
+    print('Unable to open file: wifi_settings.json')
+    print('cetch_all: try to delete wifi_settings.json if it cant be opened')
+
     try:
         os.remove('wifi_settings.json')
     except Exception as e:
-        logging('Error: {0}'.format(e))
+        print('Error: {0}'.format(e))
 
     wifi_settings_dictionary = {
         "record_data_interval_ms": 5 * 60000,
-        "send_data_interval_list_length": 11,
+        "send_data_interval_list_length": 12,
         "send_data_interval_min": 60,
-        "connect_to_open_networks": False,
         "access_point": {
             "wifi_ssid": device_settings_dictionary['unique_id'],
             "wifi_password": device_settings_dictionary['hash_unique_id']
         },
         "known_wifi": {
-        }
+        },
+        "mqtt_url": 'noflippingswitches.com',
+        "mqtt_ssl": False,
+        "mqtt_port": 1883,
+        "mqtt_username": '',
+        "mqtt_password": ''
     }
     dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
-    logging('Created wifi_settings.json')
-    logging(' ')
-    logging('Machine will reset')
-    print_log()
+    print('Created wifi_settings.json')
+    print(' ')
+    print('Machine will reset')
     machine.reset()
 
-# Load min_max_specifications.json to Python dictionary, Else create it
-try:
-    min_max_specifications_dictionary = json_to_dictionary('min_max_specifications.json')
-    logging('Loaded min_max_specifications.json')
-except Exception as e:
-    logging(' ')
-    logging('Error: {0}'.format(e))
-    logging('Unable to open file: min_max_specifications.json')
-    logging('cetch_all: try to delete min_max_specifications.json if it cant be opened')
+
+# [ Factory Reset ]
+if factory_reset_startup_value == 0:
+    led_blink(Constant_onboard_led_gpio_pin, 20, 20, 120, 0, 0)  # (pin, blinks, interval_on, interval_off, interval_before_sets, interval_after_sets)
     try:
-        os.remove('min_max_specifications.json')
+        os.remove('wifi_settings.json')
     except Exception as e:
-        logging('Error: {0}'.format(e))
-
-    min_max_specifications_dictionary = {
-        "batt_volts_min": 3.2,
-        "batt_volts_max": 3.25,
-        "ds18b20_tempC_min": 0,
-        "ds18b20_tempC_max": 0
-    }
-    dictionary_to_json(min_max_specifications_dictionary, 'min_max_specifications.json')
-    logging('Created min_max_specifications.json')
-    logging(' ')
-    logging('Machine will reset')
-    print_log()
+        print('Error: {0}'.format(e))
+    try:
+        os.remove('device_settings.json')
+    except Exception as e:
+        print('Error: {0}'.format(e))
     machine.reset()
+
 
 # [ Station Mode ]
-# ------------------------------------------------------------------------------------------------------------------
-if station_or_access_point_startup_value == "fred":  # station
+# watchdog timmer, The WDT is used to restart the system when the application crashes and ends up into a non-recoverable state.
+# Once started it cannot be stopped or reconfigured in any way.
+# After enabling, you must “feed” the watchdog periodically to prevent it from expiring and resetting the system.
+wdt = machine.WDT(timeout=45000)  # enable it with a timeout of 45s
+
+# if no wi-fi is declared by user then enable hotspot setup
+if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/connected, 1 dissconected
+
+    print('station mode selected')
     # get tempature of ds18b20 located inside the case
     tempC_internal = ds18b20(device_settings_dictionary["ds18b20_sn"])
-    logging('ds18b20_unit_tempC: {0}'.format(tempC_internal[1]))
+    # print('ds18b20_unit_tempC: {0}'.format(tempC_internal[1]))
 
     # if the rtc memry lenth is < 1 we know this is the first temp reading and only need to save the temp
+    # noinspection PyArgumentList
     rtc_read_memory = machine.RTC().memory()
     rtc_read_memory_len = len(rtc_read_memory)
     if rtc_read_memory_len < 1:
@@ -685,15 +470,17 @@ if station_or_access_point_startup_value == "fred":  # station
         # convert rtc_memory_list to a MessagePack serialization and write it to rtc memory
         rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
         # write rtc_memory_list_bytes to rtc memory
+
+        # noinspection PyArgumentList
         machine.RTC().memory(rtc_memory_list_bytes)
 
         # garbage collection before deep sleap
         gc.collect()
-        # set button to wake from deepsleap
-        esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
+        # feed the watchdog timmer
+        wdt.feed()
 
         # calculate time to sleap
-        time_to_sleep = wifi_settings_dictionary['record_data_interval']  # * wifi_settings_dictionary['send_data_interval_list_length']
+        time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
 
         # calculate time to offset sleap by how long it took to run code
         stop_time_ticks_ms = time.ticks_ms()
@@ -701,8 +488,6 @@ if station_or_access_point_startup_value == "fred":  # station
 
         # calculate corrected time to sleep
         corrected_time_to_sleep = time_to_sleep - diff_start_stop
-
-        wdt.feed()  # feed the watchdog timmer
 
         # ya cant sleep less than nothin!
         # you cant go back in time!
@@ -715,15 +500,17 @@ if station_or_access_point_startup_value == "fred":  # station
     else:
         # else the rtc memry lenth is > 1 get the length of the list in rtc_memory and check that it's less than the wifi_settings_dictionary['send_data_interval_list_length']
         # try to convert contents of rtc memory, that should be a MessagePack serialization byte literal, into a list
+
+        # noinspection PyBroadException
         try:
             rtc_memory_list = umsgpack.loads(rtc_read_memory)
-            # check that rtc_memory_list is formatted correctly if not reset machine
+            # check that rtc_memory_list is formatted correctly if not reset machine to clear the rtc memory
             if not all([isinstance(item, int) for item in rtc_memory_list]):
                 machine.reset()
         except Exception as e:
-            logging('Error: {0}'.format(e))
-            logging('Unable to convert rtc_read_memory back into a python rtc_memory_list ')
-            logging('instead resetting machine to clear read_memory')
+            # print('Error: {0}'.format(e))
+            # print('Unable to convert rtc_read_memory back into a python rtc_memory_list')
+            # print('instead resetting machine to clear read_memory')
             rtc_memory_list = False  # rtc_memory_list cant be undefined
             machine.reset()
 
@@ -738,15 +525,16 @@ if station_or_access_point_startup_value == "fred":  # station
             rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
 
             # write rtc_memory_list_bytes to rtc memory
+            # noinspection PyArgumentList
             machine.RTC().memory(rtc_memory_list_bytes)
 
             # garbage collection before deep sleap
             gc.collect()
-            # set button to wake from deepsleap
-            esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
+            # feed the watchdog timmer
+            wdt.feed()
 
             # calculate time to sleap
-            time_to_sleep = wifi_settings_dictionary['record_data_interval']  # * wifi_settings_dictionary['send_data_interval_list_length']
+            time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
 
             # calculate time to offset sleap by how long it took to run code
             stop_time_ticks_ms = time.ticks_ms()
@@ -754,8 +542,6 @@ if station_or_access_point_startup_value == "fred":  # station
 
             # calculate corrected time to sleep
             corrected_time_to_sleep = time_to_sleep - diff_start_stop
-
-            wdt.feed()  # feed the watchdog timmer
 
             # ya cant sleep less than nothin!
             # you cant go back in time!
@@ -767,7 +553,7 @@ if station_or_access_point_startup_value == "fred":  # station
 
         # else it's time to send the data to the server!
         else:
-            # do as much as possible before connecting to wifi, as it eats the most power while on.
+            # do as much as possible before connecting to wi-fi, as it eats the most power while on.
 
             # add temp to end of rtc_memory_list
             rtc_memory_list.append(int(tempC_internal[1] * 10000))
@@ -775,36 +561,26 @@ if station_or_access_point_startup_value == "fred":  # station
             # Reverse list and re-float all items in list
             rtc_memory_reversed_list = list([items / 10000 for items in reversed(rtc_memory_list)])
 
-            # calculate rtc memory
-            rtc_memory_size_bytes = 2048
-            rtc_memory_used_bytes = rtc_read_memory_len
-            rtc_memory_available_bytes = rtc_memory_size_bytes - rtc_read_memory_len
-            rtc_memory_use_percentage = float("{:.2f}".format((rtc_read_memory_len / rtc_memory_size_bytes) * 100))
-
             # get battery voltage
             batt_result = batt()
-            # get memory used
-            dm_result = dm()
-            # get storage used
-            df_result = df()
 
             # CONNECT
-            # define wifi station
+            # define Wi-Fi station
             wifi_station = network.WLAN(network.STA_IF)
             # Make sure wifi_station is not active (note: if no True/False given as an argument it will output current state)
-            # Make sure we are not connected to a wifi network
+            # Make sure we are not connected to a Wi-Fi network
             if wifi_station.active():
-                # Make sure we are not connected to a wifi network
+                # Make sure we are not connected to a Wi-Fi network
                 if wifi_station.isconnected():
                     wifi_station.disconnect()
-                    # give wifi time to disconnect
+                    # give Wi-Fi time to disconnect
                     time.sleep_ms(250)
                 wifi_station.active(False)
-                # give wifi time to go down
+                # give Wi-Fi time to go down
                 time.sleep_ms(250)
 
             wifi_station.active(True)
-            # give wifi time to come up
+            # give Wi-Fi time to come up
             time.sleep_ms(250)
 
             # how many attemps to connect to this network/ssid. will try # of times if good conection is lost NOTE: call them one at a time else jams up
@@ -812,20 +588,14 @@ if station_or_access_point_startup_value == "fred":  # station
             wifi_station.config(reconnects=15)
 
             # NOTE: anoying you cannot unassign static values for ifconfig, you must reset device. rather try dhcp networks first.
-            # NOTE: open netowrks, if a ssid had a password and now does not the last 5 values are cashed. you must cange the ssid for a open network! Gerrr. rather try open networks first if enabled.
-
-            # if enabled(True) connect to open networks first
-            if wifi_settings_dictionary['connect_to_open_networks']:
-                place = 'holder'  # create logic / scan to connect to open networks
+            # NOTE: if a ssid had a password and now does not the last 5 values are cashed. user must change the ssid for network on thier router/device! Gerrr.
 
             # make sure we are not connected
             if not wifi_station.isconnected():
-                # if no wifi is declared by user then sleep for max time to save batt until user sets a value
+                # if no Wi-Fi is declared by user then sleep for max time to save batt until user sets a value
                 if 'wifi_ssid' not in wifi_settings_dictionary['known_wifi']:
                     # garbage collection before deep sleap
                     gc.collect()
-                    # set button to wake from deepsleap
-                    esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
                     machine.deepsleep()
                 else:
                     if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
@@ -833,20 +603,15 @@ if station_or_access_point_startup_value == "fred":  # station
                     else:
                         wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'])
 
-                    logging('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
+                    # print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
                     while wifi_station.status() == network.STAT_CONNECTING:
                         pass
                     # get status after while loop finishes
                     status = wifi_connection_status(wifi_station.status())
-                    # break out of for loop if connected
-                    if wifi_station.status() == network.STAT_GOT_IP or wifi_station.isconnected():
-                        logging(str(status))
-                    # else disconnect
-                    else:
-                        logging(str(status))
-                        wifi_station.disconnect()
+                    # print(str(status))
+                    wifi_station.disconnect()
 
-                    # IMPORTANT! feed the watchdog after trying to connect to wifi ssid
+                    # IMPORTANT! feed the watchdog after trying to connect to Wi-Fi ssid
                     wdt.feed()  # feed the watchdog timmer
 
             # unable to connect, try to store extra entry into avalible rtc memory. If no room in rtc memory left then remove oldeset entry from list. Then preform a defined sleep cycle
@@ -856,15 +621,14 @@ if station_or_access_point_startup_value == "fred":  # station
                     rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
 
                     # write rtc_memory_list_bytes to rtc memory
+                    # noinspection PyArgumentList
                     machine.RTC().memory(rtc_memory_list_bytes)
 
                     # garbage collection before deep sleap
                     gc.collect()
-                    # set button to wake from deepsleap
-                    esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
 
                     # calculate time to sleap
-                    time_to_sleep = wifi_settings_dictionary['record_data_interval']  # * wifi_settings_dictionary['send_data_interval_list_length']
+                    time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
 
                     # calculate time to offset sleap by how long it took to run code
                     stop_time_ticks_ms = time.ticks_ms()
@@ -888,15 +652,14 @@ if station_or_access_point_startup_value == "fred":  # station
                     rtc_memory_list_bytes = umsgpack.dumps(rtc_memory_list)
 
                     # write rtc_memory_list_bytes to rtc memory
+                    # noinspection PyArgumentList
                     machine.RTC().memory(rtc_memory_list_bytes)
 
                     # garbage collection before deep sleap
                     gc.collect()
-                    # set button to wake from deepsleap
-                    esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
 
                     # calculate time to sleap
-                    time_to_sleep = wifi_settings_dictionary['record_data_interval']  # * wifi_settings_dictionary['send_data_interval_list_length']
+                    time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
 
                     # calculate time to offset sleap by how long it took to run code
                     stop_time_ticks_ms = time.ticks_ms()
@@ -913,62 +676,30 @@ if station_or_access_point_startup_value == "fred":  # station
                     else:
                         machine.deepsleep(corrected_time_to_sleep)
 
-            # We have connected to the wifi, do stuff
+            # We have connected to the Wi-Fi, do stuff
             if wifi_station.isconnected():
                 # get connection info
                 ifconfig = wifi_station.ifconfig()
                 hostname = wifi_station.config('hostname')
                 ssid = wifi_station.config('ssid')
-                logging('Connected to: {0}'.format(ssid))
+                # print('Connected to: {0}'.format(ssid))
 
                 data_out_dictionary = {
                     device_settings_dictionary['unique_id']: {
-                        "temperature": {
+                        "sensor": {
                             "tempC": rtc_memory_reversed_list,
-                            "tempC_record_data_interval_seconds": int(wifi_settings_dictionary['record_data_interval'] / 1000),
-                            "tempC_send_data_interval_seconds": int(wifi_settings_dictionary['send_data_interval'] / 1000)
+                            "record_data_interval_ms": int(wifi_settings_dictionary['record_data_interval_ms']),
+                            "send_data_interval_min": int(wifi_settings_dictionary['send_data_interval_min'])
                         },
-                        "system": {
-                            "battery": {
-                                "volts": batt_result[0],
-                                "percentage": batt_result[1]
-                            },
-                            "rtc_memory": {
-                                "rtc_memory_size_bytes": rtc_memory_size_bytes,
-                                "rtc_memory_used_bytes": rtc_memory_used_bytes,
-                                "rtc_memory_available_bytes": rtc_memory_available_bytes,
-                                "rtc_memory_use_percentage": rtc_memory_use_percentage
-                            },
-                            "memory": {
-                                "memory_size_megabytes": dm_result[0],
-                                "memory_used_megabytes": dm_result[1],
-                                "memory_available_megabytes": dm_result[2],
-                                "memory_use_percentage": dm_result[3]
-                            },
-                            "storage": {
-                                "storage_size_megabytes": df_result[0],
-                                "storage_used_megabytes": df_result[1],
-                                "storage_available_megabytes": df_result[2],
-                                "storage_use_percentage": df_result[3]
-                            },
-                            "wifi": {
-                                "device_hostname": hostname,
-                                "ssid": ssid,
-                                "ip_address": ifconfig[0],
-                                "subnet_mask": ifconfig[1],
-                                "gateway_server": ifconfig[2],
-                                "dns_server": ifconfig[3]
-                            },
-                            "log": {
-                                "log": log
-                            },
-                            "min_max": {
-                                "battery_volts_min": min_max_specifications_dictionary['batt_volts_min'],
-                                "battery_volts_max": min_max_specifications_dictionary['batt_volts_max'],
-                                "unit_tempC_min": min_max_specifications_dictionary['ds18b20_tempC_min'],
-                                "unit_tempC_max": min_max_specifications_dictionary['ds18b20_tempC_max']
-                            }
+                        "battery": {
+                            "volts": batt_result[0],
+                            "percentage": batt_result[1]
+                        },
+                        "device": {
+                            "device": device_settings_dictionary['device'],
+                            "sensor_id": device_settings_dictionary['ds18b20_sn']
                         }
+
                     }
                 }
 
@@ -976,30 +707,31 @@ if station_or_access_point_startup_value == "fred":  # station
 
                 # mqtt
                 client_id = hostname
-                server = 'https://foo.bar.com'
+                server = 'sun-tmp-mqtt.no-fs.com'
                 port = 8883
                 user = 'admin'
-                password = 'foobar'
+                password = 'J61X0vog851odYpAqlEfr1gI8ytoHVZQSF9p'
                 mqttc = umqtt.simple.MQTTClient(client_id, server, port, user, password,  keepalive=60, ssl=True)
-                mqttc.connect()
+                mqttc.connect(clean_session=True)
                 # print('mqttc.ping(): ', mqttc.ping())
-                topic_byte = hostname.encode()
+                topic_byte = ('noflippingswitches/sensor/' + hostname).encode()
                 msg_byte = data_out_json.encode()
-                mqttc.publish(topic_byte, msg_byte, retain=True, qos=1)
+                mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
                 mqttc.disconnect()
                 wifi_station.disconnect()
                 wifi_station.active(False)
 
+                # create checks for disconnect on qos=1, so we can save the msg and keep loggin temps!
+
                 # clear rtc memory
+                # noinspection PyArgumentList
                 machine.RTC().memory(b'')
 
                 # garbage collection before deep sleap
                 gc.collect()
-                # set button to wake from deepsleap
-                esp32.wake_on_ext0(pin=intermittent_button, level=esp32.WAKEUP_ALL_LOW)  # initializing wake up
 
                 # calculate time to sleap
-                time_to_sleep = wifi_settings_dictionary['record_data_interval']  # * wifi_settings_dictionary['send_data_interval_list_length']
+                time_to_sleep = wifi_settings_dictionary['record_data_interval_ms']  # * wifi_settings_dictionary['send_data_interval_list_length']
 
                 # calculate time to offset sleap by how long it took to run code
                 stop_time_ticks_ms = time.ticks_ms()
@@ -1021,26 +753,172 @@ if station_or_access_point_startup_value == "fred":  # station
 # [ Access Point Mode ]
     # ------------------------------------------------------------------------------------------------------------------
 else:  # access_point
-    logging('Access Point mode selected')
-    batt_tp_result = batt()
-    print_log()
-    print(batt())
-    print(' ')
-    # blink led for access_point mode
-    led_blink(Constant_onboard_led_gpio_pin, 3, 20, 300, 2000, 0)  # (pin, blinks, interval_on, interval_off, interval_before_sets, interval_after_sets)
 
-    # scan for wifi networks and get best channel to use for Access Point
+    # global vars
+    html_wifi_connection_status = ''
+    ip_address_html = ''
+    subnet_mask_html = ''
+    gateway_server_html = ''
+    dns_server_html = ''
+    hostname_html = ''
+    ssid_html = ''
+    html_mqtt_connection_status = ''
+    data_out_dictionary = {}
+
+    print('Access Point mode selected')
+
+    # log system info if dictionary loadded successfully
+    print('\ndevice: {0}\nboard: {1}\nbattery: {2}\nsoftware_version: {3}\nunique_id: {4}\nhash_unique_id: {5}\nds18b20_sn: {6}\n'.format(
+        device_settings_dictionary['device'],  # {0}
+        device_settings_dictionary['board'],  # {1}
+        device_settings_dictionary['battery'],  # {2}
+        device_settings_dictionary['software_version'],  # {3}
+        device_settings_dictionary['unique_id'],  # {4}
+        device_settings_dictionary['hash_unique_id'],  # {5}
+        device_settings_dictionary['ds18b20_sn'],  # {6}
+    ))
+
+    # get tempature of ds18b20
+    tempC_internal_ap = ds18b20(device_settings_dictionary["ds18b20_sn"])
+    # get battery voltage and % estleft
+    batt_result_ap = batt()
+
+    # scan for Wi-Fi networks and get best channel to use for Access Point
     ap_client_scan = wifi_client_scan()
     print('ap_client_scan: ', ap_client_scan)
 
+    # check connection to mqtt
+    # has user set ssid for his Wi-Fi connection?
+    if 'wifi_ssid' not in wifi_settings_dictionary['known_wifi']:
+        html_wifi_connection_status = 'Select_a_SSID_Network_Name'
+    else:
+        # CONNECT to user defined wifi network
+        # define wifi station
+        wifi_station = network.WLAN(network.STA_IF)
+        # Make sure wifi_station is not active (note: if no True/False given as an argument it will output current state)
+        # Make sure we are not connected to a wifi network
+        if wifi_station.active():
+            # Make sure we are not connected to a wifi network
+            if wifi_station.isconnected():
+                wifi_station.disconnect()
+                # give wifi time to disconnect
+                time.sleep_ms(250)
+            wifi_station.active(False)
+            # give wifi time to go down
+            time.sleep_ms(250)
 
+        wifi_station.active(True)
+        # give wifi time to come up
+        time.sleep_ms(250)
 
+        # how many attemps to connect to this network/ssid. will try # of times if good conection is lost NOTE: call them one at a time else jams up
+        wifi_station.config(hostname=device_settings_dictionary['unique_id'])
+        wifi_station.config(reconnects=5)
+
+        # NOTE: anoying you cannot unassign static values for ifconfig, you must reset device. rather try dhcp networks first.
+        # NOTE: if a ssid had a password and now does not the last 5 values are cashed. user must change the ssid for network on thier router/device! Gerrr.
+
+        # make sure we are not connected
+        if not wifi_station.isconnected():
+            if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'])
+            else:
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'])
+
+            # print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
+            while wifi_station.status() == network.STAT_CONNECTING:
+                pass
+            # get status after while loop finishes
+            status = wifi_connection_status(wifi_station.status())
+            if status == 'STAT_GOT_IP: connection successful':
+                html_wifi_connection_status = 'connection_successful'
+            print(html_wifi_connection_status)
+            print(str(status))
+
+        # We have connected to the wifi, do stuff
+        if wifi_station.isconnected():
+            # get connection info
+            ifconfig = wifi_station.ifconfig()
+            ip_address_html = ifconfig[0]
+            subnet_mask_html = ifconfig[1]
+            gateway_server_html = ifconfig[2]
+            dns_server_html = ifconfig[3]
+            hostname_html = wifi_station.config('hostname')
+            ssid_html = wifi_station.config('ssid')
+            # print('Connected to: {0}'.format(ssid))
+
+            data_out_dictionary = {
+                device_settings_dictionary['unique_id']: {
+                    "sensor": {
+                        "tempC": tempC_internal_ap[1],
+                        "record_data_interval_ms": 0,
+                        "send_data_interval_min": 0
+                    },
+                    "battery": {
+                        "volts": batt_result_ap[0],
+                        "percentage": batt_result_ap[1]
+                    },
+                    "device": {
+                        "device": device_settings_dictionary['device'],
+                        "sensor_id": device_settings_dictionary['ds18b20_sn']
+                    }
+
+                }
+            }
+
+            data_out_json = json.dumps(data_out_dictionary)
+
+            # mqtt
+            client_id = hostname_html
+            server = wifi_settings_dictionary['mqtt_url']
+            if server == 'noflippingswitches.com' or server == 'no-fs.com':
+                port = 8883
+                keepalive = 60
+                ssl = True
+                user = None
+                password = None
+            else:
+                port = wifi_settings_dictionary['mqtt_port']
+                keepalive = 60
+                ssl = wifi_settings_dictionary['mqtt_ssl']
+                user = wifi_settings_dictionary['mqtt_username']
+                if user == '':
+                    user = None
+                password = wifi_settings_dictionary['mqtt_password']
+                if password == '':
+                    password = None
+
+            mqttc = umqtt.simple.MQTTClient(client_id, server, port, user, password, keepalive, ssl)
+
+            while_loop_counter = 1
+            while True:
+                # noinspection PyBroadException
+                try:
+                    mqttc.connect(clean_session=True)
+                    topic_byte = ('noflippingswitches/sensor/' + hostname_html).encode()
+                    msg_byte = data_out_json.encode()
+                    mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
+                    mqttc.disconnect()
+                    html_mqtt_connection_status = 'mqtt_connection_successful'
+                    print('mqtt connection successful')
+                    break
+                except Exception as e:
+                    if while_loop_counter == 5:
+                        html_mqtt_connection_status = 'mqtt_unable_to_connect_check_mqtt_settings_or_internet_connection'
+                        break
+                    while_loop_counter += 1
+                    print('mqtt exception')
+
+        wifi_station.disconnect()
+        wifi_station.active(False)
+        # give wifi time to go down
+        time.sleep_ms(250)
 
     # start up access point
     # noinspection PyUnresolvedReferences
     ap = network.WLAN(network.AP_IF)
     # Make sure ap is not active (note: if no True/False given as an argument it will output current state)
-    # Make sure we are not connected to a ap network
+    # Make sure we are not connected to ap network
     if ap.active():
         ap.active(False)
         # give ap time to go down
@@ -1048,9 +926,6 @@ else:  # access_point
     ap.active(True)
     # give ap time to come up
     time.sleep_ms(250)
-
-
-
 
     # config ap
     # use AUTH_WPA2_PSK for authmode. Note, AUTH_WPA_WPA2_PSK, WPA2 has been standard scence 2006! if users device cant handle it ... tooo bad! also apple does not like WPA1
@@ -1063,7 +938,7 @@ else:  # access_point
 
     while ap.active() is False:
         pass
-    # IMPORTANT! feed the watchdog after trying to setup ap
+    # IMPORTANT! feed the watchdog after trying to setup_ ap
     wdt.feed()  # feed the watchdog timmer
 
     print('AP creation successful and Broadcasting')
@@ -1077,11 +952,11 @@ else:  # access_point
     s.listen(1)
     # s.settimeout(3)
 
-    access_point_machine_reset = False
+    first_tab_access_point_machine_reset = False
+    third_tab_access_point_machine_reset = False
     while True:
         try:
-            ### left offf here Put whole while loop in a try statment to cover errors!!!!!
-            # set watchdog time so it resets if server locks up
+            # set watchdog time, so it resets if server locks up
             # also see about How to retry after exception? https://stackoverflow.com/questions/2083987/how-to-retry-after-exception
             # also try new device as this one may be foobar! If that does not work then try a limited for loop
 
@@ -1135,23 +1010,23 @@ else:  # access_point
                     try:
                         # load translation
                         language_dictionary_html = json_to_dictionary(path)
-                        # logging('Loaded language_dictionary_html: {0}'.format(path))
+                        # print('Loaded language_dictionary_html: {0}'.format(path))
                         break
                     except Exception as e:
-                        logging(' ')
-                        logging('Error: {0}'.format(e))
-                        logging('Unable to load language_dictionary_html: {0}'.format(path))
+                        print(' ')
+                        print('Error: {0}'.format(e))
+                        print('Unable to load language_dictionary_html: {0}'.format(path))
             else:
                 # translations path
                 path = '/lang/html/language_en.json'
                 try:
                     # load translation
                     language_dictionary_html = json_to_dictionary(path)
-                    # logging('Loaded language_dictionary_html: {0}'.format(path))
+                    # print('Loaded language_dictionary_html: {0}'.format(path))
                 except Exception as e:
-                    logging(' ')
-                    logging('Error: {0}'.format(e))
-                    logging('Unable to load language_dictionary_html: {0}'.format(path))
+                    print(' ')
+                    print('Error: {0}'.format(e))
+                    print('Unable to load language_dictionary_html: {0}'.format(path))
 
             param_request_dictionary = {}
             if language_dictionary_html:
@@ -1170,16 +1045,11 @@ else:  # access_point
 
                 print('param_request_dictionary: ', param_request_dictionary)
 
-
-
-
-
-
                 # what to send client based on request
-                if file_request == '' or file_request == 'wifi-static' or file_request == 'wifi-dhcp' or file_request == 'wifi-scan' or file_request == 'wifi-apply' or file_request == 'sensor-apply':
+                if file_request == '' or file_request == 'wifi-static' or file_request == 'wifi-dhcp' or file_request == 'wifi-scan' or file_request == 'wifi-apply' or file_request == 'sensor-apply' or file_request == 'test-connection':
                     header = 'HTTP/1.1 200 OK\nContent-Type: text/html\nConnection: close\n\n'
 
-                    # set Meta Refresh for if user does a wifi-scan
+                    # set Meta Refresh empty
                     meta_refresh = ''
 
                     # -=[ first-tab, WiFi }=-
@@ -1205,25 +1075,23 @@ else:  # access_point
                                 "wifi_password": param_request_dictionary['password']
                             }
                         dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
-                        logging('Updated wifi_settings.json')
-                        logging('{0}'.format(wifi_settings_dictionary))
-                        print_log()
+                        print('Updated wifi_settings.json')
+                        print('{0}'.format(wifi_settings_dictionary))
 
-                    if 'scan' in param_request_dictionary or access_point_machine_reset:
-
-                        if access_point_machine_reset:
-                            meta_refresh = '<meta http-equiv="refresh" content="15; url=/#first-tab"/>'
+                    if 'scan' in param_request_dictionary or first_tab_access_point_machine_reset:
+                        if first_tab_access_point_machine_reset:
+                            meta_refresh = '<meta http-equiv="refresh" content="30; url=/#first-tab"/>'
                         else:
                             # header = 'HTTP/1.1 303 See Other\nLocation: /#first-tab\nContent-Type: text/html\nConnection: close\n\n'
                             meta_refresh = '<meta http-equiv="refresh" content="0; url=/#first-tab"/>'
 
-                        found_networks_html += '{0},&#13;&#10;{1},&#13;&#10;{2}%,&#13;&#10;{3},&#13;&#10;'\
-                            .format(
-                                language_dictionary_html["Disconnecting_WiFi_access_point"],  # {0}
-                                language_dictionary_html["Scanning_WiFi_networks"],  # {1}
-                                language_dictionary_html["Webpage_will_automatically_refresh"],  # {2}
-                                language_dictionary_html["Please_wait_x_seconds"],  # {3}
-                            )
+                        found_networks_html += '{0}&#13;&#10;{1}&#13;&#10;{2}%&#13;&#10;{3}&#13;&#10;{4}&#13;&#10;'.format(
+                            language_dictionary_html["Disconnecting_WiFi_access_point"],  # {0}
+                            language_dictionary_html["Scanning_WiFi_networks"],  # {1}
+                            language_dictionary_html["Webpage_will_automatically_refresh"],  # {2}
+                            language_dictionary_html["Please_wait_x_seconds"],  # {3}
+                            language_dictionary_html["You_may_have_to_reconnect_to_the_WiFi"],  # {4}
+                        )
 
                     elif ap_client_scan:
                         for i in range(len(ap_client_scan)):
@@ -1235,7 +1103,7 @@ else:  # access_point
                             else:
                                 signal_quality = 2 * (ap_client_scan[i][3] + 90)
 
-                            found_networks_html += '{6}: {0},&#13;&#10;{7}: {1},&#13;&#10;{8}: {2}%,&#13;&#10;{9}: {3}dBm,&#13;&#10;{10}: {4},&#13;&#10;{11}: {5}&#13;&#10;&#13;&#10;'.format(
+                            found_networks_html += '{6}: {0}&#13;&#10;{7}: {1}&#13;&#10;{8}: {2}%&#13;&#10;{9}: {3}dBm&#13;&#10;{10}: {4}&#13;&#10;{11}: {5}&#13;&#10;&#13;&#10;'.format(
                                 ap_client_scan[i][0],  # {0} SSID
                                 ap_client_scan[i][1],  # {1} BSSID
                                 signal_quality,  # {2} Signal Quality
@@ -1291,22 +1159,15 @@ else:  # access_point
                             password_html_input_vlaue  # {6}
                         )
 
-                    # -=[ second-tab, Data }=-
+                    # -=[ second-tab, Sensor }=-
                     # get/format sensor information for html
-                    # get tempature of ds18b20 located inside the case
-                    tempC_internal_html = ds18b20(device_settings_dictionary["ds18b20_sn"])
-                    # get battery voltage and % estleft
-                    batt_result_html = batt()
-
-                    sensor_info_html = '{3} °C: {0},&#13;&#10;' \
-                                       '{4} V: {1},&#13;&#10;' \
-                                       '{4} %: {2},&#13;&#10;'.format(
-                                        tempC_internal_html[1],
-                                        batt_result_html[0],
-                                        batt_result_html[1],
-                                        language_dictionary_html["Tempature"],
-                                        language_dictionary_html["Battery"]
-                                        )
+                    sensor_info_html = '{3} °C: {0}&#13;&#10;{4} V: {1}&#13;&#10;{4} %: {2}&#13;&#10;'.format(
+                        tempC_internal_ap[1],
+                        batt_result_ap[0],
+                        batt_result_ap[1],
+                        language_dictionary_html["Tempature"],
+                        language_dictionary_html["Battery"]
+                    )
 
                     if 'refresh_second_tab' in param_request_dictionary:
                         # header = 'HTTP/1.1 303 See Other\nLocation: /#second-tab\nContent-Type: text/html\nConnection: close\n\n'
@@ -1354,104 +1215,102 @@ else:  # access_point
                                 wifi_settings_dictionary['send_data_interval_min'] = send_data_interval
 
                         dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
-                        logging('Updated wifi_settings.json')
-                        logging('{0}'.format(wifi_settings_dictionary))
-                        print_log()
+                        print('Updated wifi_settings.json')
+                        print('{0}'.format(wifi_settings_dictionary))
 
-                    html_start = '<!DOCTYPE html>'
-                    html_lang = '<html lang={0}>'.format(language_html_code)
-
-                    html_head_start = '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1">{0}<link rel="icon" type="image/svg" href="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+IDxzdmcgd2lkdGg9IjUwMCIgaGVpZ2h0PSI1MDAiIHZpZXdCb3g9IjAgMCA1MDAgNTAwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnN2Zz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPiA8IS0tIENyZWF0ZWQgd2l0aCBTVkctZWRpdCAtIGh0dHBzOi8vZ2l0aHViLmNvbS9TVkctRWRpdC9zdmdlZGl0LS0+IDxnIGNsYXNzPSJsYXllciI+IDx0aXRsZT5MYXllciAxPC90aXRsZT4gPHRleHQgZmlsbD0iIzAwMDAwMCIgZm9udC1mYW1pbHk9IlNlcmlmIiBmb250LXNpemU9IjMwMCIgaWQ9InN2Z18yIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgeD0iMTIxLjQiIHhtbDpzcGFjZT0icHJlc2VydmUiIHk9IjIyNS44Ij5OPC90ZXh0PiA8dGV4dCBmaWxsPSIjMDAwMDAwIiBmb250LWZhbWlseT0iU2VyaWYiIGZvbnQtc2l6ZT0iMzAwIiBpZD0ic3ZnXzMiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLXdpZHRoPSIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiB4PSIzMDIuNCIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIgeT0iMzQ2LjgiPkY8L3RleHQ+IDx0ZXh0IGZpbGw9IiMwMDAwMDAiIGZvbnQtZmFtaWx5PSJTZXJpZiIgZm9udC1zaXplPSIzMDAiIGlkPSJzdmdfNCIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2Utd2lkdGg9IjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIHRyYW5zZm9ybT0ibWF0cml4KDEgMCAwIDEgMCAwKSIgeD0iNDEwLjQiIHhtbDpzcGFjZT0icHJlc2VydmUiIHk9IjQ4OC44Ij5TPC90ZXh0PiA8L2c+IDwvc3ZnPg=="><title>NFS</title><meta name="noflippingswitches" content="NFS">' \
-                        .format(
-                            meta_refresh,  # {0}
+                    # -=[ third-tab, Data }=-
+                    if wifi_settings_dictionary['mqtt_url'] == 'noflippingswitches.com' or wifi_settings_dictionary['mqtt_url'] == 'no-fs.com':
+                        html_content_data_extra_settings = ''
+                    else:
+                        html_content_data_extra_settings = '<label for="mqtt_user_name" style="font-size:16px">{0}: <input type="text" id="mqtt_user_name" name="mqtt_user_name" value="{1}"></label><label for="mqtt_password" style="font-size:16px">{2}: <input type="password" id="mqtt_password" name="mqtt_password" value="{3}"></label><label for="mqtt_port_number" style="font-size:16px">{4}: <input type="number" id="mqtt_port_number" name="mqtt_port_number" value="{5}" min="1" max="65535"></label>'.format(
+                            language_dictionary_html['user_name'],  # {0}
+                            wifi_settings_dictionary['mqtt_username'],  # {1}
+                            language_dictionary_html['Password'],  # {2}
+                            wifi_settings_dictionary['mqtt_password'],  # {3}
+                            language_dictionary_html['port_number'],  # {4}
+                            wifi_settings_dictionary['mqtt_port']  # {5}
                         )
 
+                        if wifi_settings_dictionary['mqtt_ssl']:
+                            html_content_data_extra_settings += '<label for="ssl" style="font-size:16px">SSL: <input type="checkbox" id="ssl" name="ssl" value="True" checked></label>'
+                        else:
+                            html_content_data_extra_settings += '<label for="ssl" style="font-size:16px">SSL: <input type="checkbox" id="ssl" name="ssl" value="True"></label>'
+
+                    # format output for html_content_data
+                    html_content_data = '{0}'.format(language_dictionary_html['failed_incorrect_password_out_of_range_or_unreachable'])
+
+                    if html_wifi_connection_status == 'connection_successful':
+                        html_content_data = '{12}&#13;&#10;{0}: {1}&#13;&#10;{2}: {3}&#13;&#10;{4}: {5}&#13;&#10;{6}: {7}&#13;&#10;{8}: {9}&#13;&#10;{10}: {11}&#13;&#10;'.format(
+                            language_dictionary_html['hostname'],  # {0}
+                            hostname_html,  # {1}
+                            language_dictionary_html['SSID_Network_Name'],  # {2}
+                            ssid_html,  # {3}
+                            language_dictionary_html['IP_Address'],  # {4}
+                            ip_address_html,  # {5}
+                            language_dictionary_html['Subnet_Mask'],  # {6}
+                            subnet_mask_html,  # {7}
+                            language_dictionary_html['Gateway'],  # {8}
+                            gateway_server_html,  # {9}
+                            language_dictionary_html['DNS_Server'],  # {10}
+                            dns_server_html,  # {11},
+                            language_dictionary_html['connection_successful']  # {12}
+                        )
+                        if html_mqtt_connection_status == 'mqtt_unable_to_connect_check_mqtt_settings_or_internet_connection':
+                            html_content_data += '&#13;&#10;{0}'.format(language_dictionary_html['mqtt_unable_to_connect_check_mqtt_settings_or_internet_connection'])
+                        if html_mqtt_connection_status == 'mqtt_connection_successful':
+                            html_content_data += '&#13;&#10;{3}&#13;&#10;{0}: {1}&#13;&#10;{2}'.format(
+                                language_dictionary_html['mqtt_server'],  # {0}
+                                wifi_settings_dictionary['mqtt_url'],  # {1}
+                                language_dictionary_html['data_sent'],  # {2}
+                                language_dictionary_html['mqtt_connection_successful']  # {3}
+                            )
+
+                    if 'refresh_third_tab' in param_request_dictionary or third_tab_access_point_machine_reset:
+                        if third_tab_access_point_machine_reset:
+                            meta_refresh = '<meta http-equiv="refresh" content="30; url=/#third-tab"/>'
+                            print('content=30')
+                        else:
+                            # header = 'HTTP/1.1 303 See Other\nLocation: /#third-tab\nContent-Type: text/html\nConnection: close\n\n'
+                            meta_refresh = '<meta http-equiv="refresh" content="0; url=/#third-tab"/>'
+
+                            if 'mqtt_address' in param_request_dictionary:
+                                wifi_settings_dictionary['mqtt_url'] = param_request_dictionary['mqtt_address']
+                            if 'mqtt_user_name' in param_request_dictionary:
+                                wifi_settings_dictionary['mqtt_username'] = param_request_dictionary['mqtt_user_name']
+                            if 'mqtt_password' in param_request_dictionary:
+                                wifi_settings_dictionary['mqtt_password'] = param_request_dictionary['mqtt_password']
+                            if 'mqtt_port_number' in param_request_dictionary:
+                                wifi_settings_dictionary['mqtt_port'] = param_request_dictionary['mqtt_port_number']
+
+                            if 'ssl' not in param_request_dictionary:
+                                wifi_settings_dictionary['mqtt_ssl'] = False
+                            else:
+                                wifi_settings_dictionary['mqtt_ssl'] = True
+
+                            dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
+                            print('Updated wifi_settings.json')
+                            print('{0}'.format(wifi_settings_dictionary))
+                            print('content=30')
+
+                        html_content_data = '{0}&#13;&#10;{1}&#13;&#10;{2}%&#13;&#10;{3}%&#13;&#10;'.format(
+                            language_dictionary_html["Disconnecting_WiFi_access_point"],  # {0}
+                            language_dictionary_html["Webpage_will_automatically_refresh"],  # {1}
+                            language_dictionary_html["Please_wait_x_seconds"],  # {2}
+                            language_dictionary_html["You_may_have_to_reconnect_to_the_WiFi"],  # {3}
+                        )
+
+                    # START CREATION OF HTML FOR SITE
+                    html_start = '<!DOCTYPE html>'
+                    html_lang = '<html lang={0}>'.format(language_html_code)
+                    html_head_start = '<head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1">{0}<link rel="icon" type="image/svg" href="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIj8+IDxzdmcgd2lkdGg9IjUwMCIgaGVpZ2h0PSI1MDAiIHZpZXdCb3g9IjAgMCA1MDAgNTAwIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHhtbG5zOnN2Zz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPiA8IS0tIENyZWF0ZWQgd2l0aCBTVkctZWRpdCAtIGh0dHBzOi8vZ2l0aHViLmNvbS9TVkctRWRpdC9zdmdlZGl0LS0+IDxnIGNsYXNzPSJsYXllciI+IDx0aXRsZT5MYXllciAxPC90aXRsZT4gPHRleHQgZmlsbD0iIzAwMDAwMCIgZm9udC1mYW1pbHk9IlNlcmlmIiBmb250LXNpemU9IjMwMCIgaWQ9InN2Z18yIiBzdHJva2U9IiMwMDAwMDAiIHN0cm9rZS13aWR0aD0iMCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgeD0iMTIxLjQiIHhtbDpzcGFjZT0icHJlc2VydmUiIHk9IjIyNS44Ij5OPC90ZXh0PiA8dGV4dCBmaWxsPSIjMDAwMDAwIiBmb250LWZhbWlseT0iU2VyaWYiIGZvbnQtc2l6ZT0iMzAwIiBpZD0ic3ZnXzMiIHN0cm9rZT0iIzAwMDAwMCIgc3Ryb2tlLXdpZHRoPSIwIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiB4PSIzMDIuNCIgeG1sOnNwYWNlPSJwcmVzZXJ2ZSIgeT0iMzQ2LjgiPkY8L3RleHQ+IDx0ZXh0IGZpbGw9IiMwMDAwMDAiIGZvbnQtZmFtaWx5PSJTZXJpZiIgZm9udC1zaXplPSIzMDAiIGlkPSJzdmdfNCIgc3Ryb2tlPSIjMDAwMDAwIiBzdHJva2Utd2lkdGg9IjAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIHRyYW5zZm9ybT0ibWF0cml4KDEgMCAwIDEgMCAwKSIgeD0iNDEwLjQiIHhtbDpzcGFjZT0icHJlc2VydmUiIHk9IjQ4OC44Ij5TPC90ZXh0PiA8L2c+IDwvc3ZnPg=="><title>NFS</title><meta name="noflippingswitches" content="NFS">'.format(meta_refresh)
                     html_static_style = 'body {background: #CDDC39;font-family: Verdana, Arial, Helvetica, Tahoma, sans-serif;}.tab {display: none;}.tab:target {display: block;}.tab:last-child {display: block;}.tab:target~section.tab:last-child {display: none;}.tab>nav>a.active {background: #fffffff6;color: #000;}main .tab {width: 100%;max-width: 500px;}main {width: 100%;max-width: 500px;margin: 0 auto;padding: 50px 0;}.tab>* {width: 100%;padding-top: 10px;margin: 0;}.tab>nav {padding: 0;display: flex;justify-content: center;gap: 5px;}.tab>nav>a {cursor: pointer;padding: 13px 25px;margin: 0px 2px;background: #000;display: inline-block;color: #fff;border-top: 3px solid #000;border-radius: 3px 3px 0px 0px;text-decoration: none;}.tab-box {padding: 5px;background: #fff;box-shadow: 0 2rem 2rem #00000080;animation: fadein 2s;border-radius: 5px;}.tab-box img {width: 100%;height: 100%;}@keyframes fadein {from {opacity: 0;}to {opacity: 1;}}.form-style-5{max-width: 500px;background: #f4f7f8;padding: 20px;border-radius: 5px;}.form-style-5 fieldset{border: none;}.form-style-5 legend {font-size: 1.4em;margin-bottom: 10px;}.form-style-5 label {display: block;margin-bottom: 8px;}.form-style-5 input[type="text"], .form-style-5 input[type="date"], .form-style-5 input[type="datetime"], .form-style-5 input[type="email"], .form-style-5 input[type="number"], .form-style-5 input[type="search"], .form-style-5 input[type="time"], .form-style-5 input[type="url"], .form-style-5 input[type="password"], .form-style-5 textarea, .form-style-5 select {border: none;border-radius: 4px;font-size: 15px;margin: 0;outline: 0;padding: 10px;width: 100%;box-sizing: border-box;-webkit-box-sizing: border-box;-moz-box-sizing: border-box;background-color: #e8eeef;color:#8a97a0;-webkit-box-shadow: 0 1px 0 rgba(0,0,0,0.03) inset;-moz-box-shadow: 0 1px 0 rgba(0,0,0,0.03) inset;box-shadow: 0 1px 0 rgba(0,0,0,0.03) inset;margin-bottom: 30px;}.form-style-5 input[type="text"]:focus, .form-style-5 input[type="date"]:focus, .form-style-5 input[type="datetime"]:focus, .form-style-5 input[type="email"]:focus, .form-style-5 input[type="number"]:focus, .form-style-5 input[type="search"]:focus, .form-style-5 input[type="time"]:focus, .form-style-5 input[type="url"]:focus, .form-style-5 input[type="password"]:focus, .form-style-5 textarea:focus, .form-style-5 select:focus{background: #d2d9dd;}.form-style-5 select{-webkit-appearance: menulist-button;-moz-appearance: menulist-button;height:35px;}.form-style-5 .section_titles {background: #1abc9c;color: #fff;height: 30px;display: inline-block;font-size: 0.8em;margin-right: 4px;line-height: 30px;text-align: center;text-shadow: 0 1px 0 rgba(255,255,255,0.2);border-radius: 5px 5px 5px 5px;}.form-style-5 input[type="submit"], .form-style-5 input[type="button"] {position: relative;display: block;padding: 19px 39px 18px 39px;color: #FFF;margin: 0 auto;background: #DC9A39;font-size: 18px;text-align: center;font-style: normal;width: 100%;margin-bottom: 10px;border: none;border-radius: 5px 5px 5px 5px;}.form-style-5 input[type="submit"]:hover, .form-style-5 input[type="button"]:hover {background: #ba8536;}'
-                    html_style = '<style>' \
-                                 ' .scanButton{{font-size: 18px; border: none; text-align: center; background: #DC9A39; color: #fff; height: 30px; width: 110px; display: inline-block; margin-right: 4px; line-height: 0px; text-align: center; text-shadow: 0 1px 0 rgba(255,255,255,0.2); border-radius: 5px 5px 5px 5px;}}' \
-                                 ' .scanButton:hover span {{display:none;}}' \
-                                 ' .scanButton:hover:before {{content:"{0}";}}' \
-                                 ' .scanButton:hover {{background-color: #ba8536;}}' \
-                                 ' .dhcpButton {{font-size: 18px; border: none; text-align: center; background: #DC9A39; color: #fff; height: 30px; width: 80px; display: inline-block; margin-right: 4px; line-height: 0px; text-align: center; text-shadow: 0 1px 0 rgba(255,255,255,0.2); border-radius: 5px 5px 5px 5px;}}' \
-                                 ' .dhcpButton:hover span {{display:none;}}' \
-                                 ' .dhcpButton:hover:before {{content:"{1}";}} .dhcpButton:hover {{background-color: #ba8536;}}' \
-                                 ' {2}</style>'.format(
+                    html_style = '<style>.scanButton{{font-size: 18px; border: none; text-align: center; background: #DC9A39; color: #fff; height: 30px; width: 110px; display: inline-block; margin-right: 4px; line-height: 0px; text-align: center; text-shadow: 0 1px 0 rgba(255,255,255,0.2); border-radius: 5px 5px 5px 5px;}}.scanButton:hover span {{display:none;}}.scanButton:hover:before {{content:"{0}";}}.scanButton:hover {{background-color: #ba8536;}}.dhcpButton {{font-size: 18px; border: none; text-align: center; background: #DC9A39; color: #fff; height: 30px; width: 80px; display: inline-block; margin-right: 4px; line-height: 0px; text-align: center; text-shadow: 0 1px 0 rgba(255,255,255,0.2); border-radius: 5px 5px 5px 5px;}}.dhcpButton:hover span {{display:none;}}.dhcpButton:hover:before {{content:"{1}";}} .dhcpButton:hover {{background-color: #ba8536;}}{2}</style>'.format(
                         language_dictionary_html["Scan"],
                         language_dictionary_html[style_content],
                         html_static_style
                     )
                     html_head_end = '</head>'
-                    html_body = '<body><main>' \
-                                '<section class="tab" id="third-tab">' \
-                                '<nav>' \
-                                '<a href="#first-tab">{0}</a>' \
-                                '<a href="#second-tab">{1}</a>' \
-                                '<a href="#third-tab" class="active">{2}</a>' \
-                                '</nav>' \
-                                '<div class="tab-box">' \
-                                '<imgsrc="https://images.unsplash.com/photo-1513006666308-523b5f33c3dd?ixlib=rb-1.2.1&ixid=eyJhcHBfaWQiOjEyMDd9&auto=format&fit=crop&w=2592&q=80" />' \
-                                '</div>' \
-                                '</section>' \
-                                '<section class="tab" id="second-tab">' \
-                                '<nav>' \
-                                '<a href="#first-tab">{0}</a>' \
-                                '<a href="#second-tab" class="active">{1}</a>' \
-                                '<a href="#third-tab">{2}</a>' \
-                                '</nav>' \
-                                '<div class="tab-box">' \
-                                '<div class="form-style-5">' \
-                                '' \
-                                '<form action="/#second-tab" method="GET">' \
-                                '<fieldset><legend>' \
-                                '<input type="hidden" name="refresh_second_tab" value="True"/>' \
-                                '<button class="scanButton"><span>{1}</span></button> ' \
-                                '</legend>' \
-                                '<textarea rows="3" style="white-space: pre; overflow: scroll; resize: vertical; width: 100%;" wrap="off" name="scanned_networks" disabled>' \
-                                '{8}' \
-                                '</textarea>' \
-                                '</form>' \
-                                '' \
-                                '<form action="/sensor-apply#second-tab" method="GET">' \
-                                '<label for="take_reading" style="font-size:20px">{9}:</label>' \
-                                '<input type="number" min="0" max="31536000000" name="record_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;"value="{13}" required>' \
-                                '<select id="take_reading" name="record_every_min_hr" style="width:120px;text-align:left;height:38px;">' \
-                                '<option value="minutes">{11}</option>' \
-                                '<option value="hours">{12}</option>' \
-                                '</select>' \
-                                '<br>' \
-                                '<label for="send_reading" style="font-size:20px">{10}:</label>' \
-                                '<input type="number" min="0" max="31536000000" name="send_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;" value="{14}" required>' \
-                                '<select id="send_reading" name="send_every_min_hr" style="width:120px;text-align:left;height:38px;">' \
-                                '<option value="minutes">{11}</option>' \
-                                '<option value="hours">{12}</option>' \
-                                '</select>' \
-                                '<br><br>' \
-                                '<input type="submit" value="{6}" />' \
-                                '</fieldset>' \
-                                '</form>' \
-                                '</div></div>' \
-                                '</section>' \
-                                '<section class="tab" id="first-tab">' \
-                                '<nav>' \
-                                '<a href="#first-tab" class="active">{0}</a>' \
-                                '<a href="#second-tab">{1}</a>' \
-                                '<a href="#third-tab">{2}</a>' \
-                                '</nav><div class="tab-box">' \
-                                '<div class="form-style-5">' \
-                                '<form action="/{7}#first-tab" method="GET">' \
-                                '<fieldset><legend><input type="hidden" name="scan" value="True"/>' \
-                                '<button class="scanButton"><span>{3}</span></button> ' \
-                                '</legend>' \
-                                '<textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="scanned_networks" disabled>' \
-                                '{4}' \
-                                '</textarea>' \
-                                '</form>' \
-                                '{5}' \
-                                '<br><br>' \
-                                '<input type="submit" value="{6}" />' \
-                                '<!-- <textarea name="field3" placeholder="foo bar"></textarea>  -->' \
-                                '</fieldset></form></div></div></main></body>' \
-                        .format(
+                    html_body = '<body><main><section class="tab" id="third-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab" class="active">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/test-connection#third-tab" method="GET"><fieldset><input type="hidden" name="refresh_third_tab" value="True"/><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="test_connection_output" disabled>{15}</textarea><br><br><label for="mqtt_address" style="font-size:20px">MQTT URL/IP:</label><input type="text" id="mqtt_address" name="mqtt_address" minlength="1" maxlength="2048" value="{17}" required>{18}<br><br><input type="submit" value="{16}" /></fieldset></form></div></div></section><section class="tab" id="second-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab" class="active">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/#second-tab" method="GET"><fieldset><legend><input type="hidden" name="refresh_second_tab" value="True"/><button class="scanButton"><span>{1}</span></button></legend><textarea rows="3" style="white-space: pre; overflow: scroll; resize: vertical; width: 100%;" wrap="off" name="scanned_sensors" disabled>{8}</textarea></form><form action="/sensor-apply#second-tab" method="GET"><label for="take_reading" style="font-size:20px">{9}:</label><input type="number" min="0" max="31536000000" name="record_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;"value="{13}" required><select id="take_reading" name="record_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><label for="send_reading" style="font-size:20px">{10}:</label><input type="number" min="0" max="31536000000" name="send_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;" value="{14}" required><select id="send_reading" name="send_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section><section class="tab" id="first-tab"><nav><a href="#first-tab" class="active">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/{7}#first-tab" method="GET"><fieldset><legend><input type="hidden" name="scan" value="True"/><button class="scanButton"><span>{3}</span></button></legend><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="scanned_networks" disabled>{4}</textarea></form>{5}<br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section></main></body>'.format(
                         language_dictionary_html["WiFi"],  # {0}
                         language_dictionary_html["Sensor"],  # {1}
                         language_dictionary_html["Data"],  # {2}
@@ -1466,12 +1325,22 @@ else:  # access_point
                         language_dictionary_html["Minutes"],  # {11}
                         language_dictionary_html["Hours"],  # {12}
                         int(wifi_settings_dictionary['record_data_interval_ms'] / 60000),  # {13}
-                        wifi_settings_dictionary['send_data_interval_min']  # {14}
+                        wifi_settings_dictionary['send_data_interval_min'],  # {14}
+                        html_content_data,  # {15}
+                        language_dictionary_html["Test_Connection"],  # {16}
+                        wifi_settings_dictionary['mqtt_url'],  # {17}
+                        html_content_data_extra_settings  # {18}
                     )
                     html_end = '</html>'
-                    response = '{0}{1}{2}{3}{4}{5}{6}'.format(html_start, html_lang, html_head_start, html_style, html_head_end, html_body, html_end)
-
-
+                    response = '{0}{1}{2}{3}{4}{5}{6}'.format(
+                        html_start,  # {0}
+                        html_lang,  # {1}
+                        html_head_start,  # {2}
+                        html_style,  # {3}
+                        html_head_end,  # {4}
+                        html_body,  # {5}
+                        html_end  # {6}
+                    )
 
                 else:
                     try:
@@ -1492,75 +1361,29 @@ else:  # access_point
 
                     except Exception as e:
                         header = 'HTTP/1.1 404 Not Found\nContent-Type: text/html\nConnection: close\n\n'
-                        response = '<!DOCTYPE html>' \
-                                   '<html lang=en>' \
-                                   '<head>' \
-                                   '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />' \
-                                   '<meta name="viewport" content="width=device-width, initial-scale=1">' \
-                                   '<title>NFS</title>' \
-                                   '<meta name="noflippingswitches" content="NFS">' \
-                                   '</head>' \
-                                   '<center><h3>Error 404: File {0} not found</h3><p>{1}</p></center></body>' \
-                                   '</html>'.format(file_request, e)
+                        response = '<!DOCTYPE html><html lang=en><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1"><title>NFS</title><meta name="noflippingswitches" content="NFS"></head><center><h3>Error 404: File {0} not found</h3><p>{1}</p></center></body></html>'.format(file_request, e)
 
             else:
                 # Unable to load language_dictionary_html
                 header = 'HTTP/1.1 500 Internal Server Error\nContent-Type: text/html\nConnection: close\n\n'
-                response = '<!DOCTYPE html>' \
-                           '<html lang=en>' \
-                           '<head>' \
-                           '<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />' \
-                           '<meta name="viewport" content="width=device-width, initial-scale=1">' \
-                           '<title>NFS</title>' \
-                           '<meta name="noflippingswitches" content="NFS">' \
-                           '</head>' \
-                           '<body><center><h3>Error 500: Unable to load a language_dictionary_html</h3></center></body>' \
-                           '</html>'
-
-
+                response = '<!DOCTYPE html><html lang=en><head><meta http-equiv="Content-Type" content="text/html; charset=utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1"><title>NFS</title><meta name="noflippingswitches" content="NFS"></head><body><center><h3>Error 500: Unable to load a language_dictionary_html</h3></center></body></html>'
 
             connection.send(header)
             connection.sendall(response)
             connection.close()
-            # print('this is the end')
-            # print('Free memory =', gc.mem_free())
-            # print(' ')
             # garbage collection after serving each page
-            # gc.collect()
+            gc.collect()
 
             # Things to_do after serving page
             if 'scan' in param_request_dictionary:
-                access_point_machine_reset = True
-            elif access_point_machine_reset:
+                first_tab_access_point_machine_reset = True
+            elif first_tab_access_point_machine_reset:
+                machine.reset()
+
+            if 'refresh_third_tab' in param_request_dictionary:
+                third_tab_access_point_machine_reset = True
+            elif third_tab_access_point_machine_reset:
                 machine.reset()
 
         except Exception as e:
-            logging('Error: {0}'.format(e))
-            print_log()
-            # Add server restart here !!!!
-
-
-    # Close socket
-    # s.close()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# wdt.feed()  # feed the watchdog timmer
-
-# print_log()
+            print('Error: {0}'.format(e))
