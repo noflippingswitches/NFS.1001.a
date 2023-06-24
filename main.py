@@ -910,7 +910,6 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
                     machine.deepsleep(corrected_time_to_sleep)
 
 # [ Access Point Mode ]
-    # ------------------------------------------------------------------------------------------------------------------
 else:  # access_point
 
     # global vars
@@ -944,7 +943,7 @@ else:  # access_point
 
     # scan for Wi-Fi networks and get best channel to use for Access Point
     ap_client_scan = wifi_client_scan()
-    print('ap_client_scan: ', ap_client_scan)
+    # print('ap_client_scan: ', ap_client_scan)
 
     # check connection to mqtt
     # has user set ssid for his Wi-Fi connection?
@@ -991,8 +990,8 @@ else:  # access_point
             status = wifi_connection_status(wifi_station.status())
             if status == 'STAT_GOT_IP: connection successful':
                 html_wifi_connection_status = 'connection_successful'
-            print(html_wifi_connection_status)
-            print(str(status))
+            # print(html_wifi_connection_status)
+            # print(str(status))
 
         # We have connected to the wifi, do stuff
         if wifi_station.isconnected():
@@ -1059,14 +1058,14 @@ else:  # access_point
                     mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
                     mqttc.disconnect()
                     html_mqtt_connection_status = 'mqtt_connection_successful'
-                    print('mqtt connection successful')
+                    # print('mqtt connection successful')
                     break
                 except Exception as e:
                     if while_loop_counter == 5:
                         html_mqtt_connection_status = 'mqtt_unable_to_connect_check_mqtt_settings_or_internet_connection'
                         break
                     while_loop_counter += 1
-                    print('mqtt exception')
+                    # print('mqtt failed')
 
         wifi_station.disconnect()
         wifi_station.active(False)
@@ -1090,16 +1089,16 @@ else:  # access_point
     # use AUTH_WPA2_PSK for authmode. Note, AUTH_WPA_WPA2_PSK, WPA2 has been standard scence 2006! if users device cant handle it ... tooo bad! also apple does not like WPA1
     # noinspection PyUnresolvedReferences
     ap.config(channel=1, hidden=False, essid=wifi_settings_dictionary['access_point']['wifi_ssid'], authmode=network.AUTH_WPA2_PSK, password=wifi_settings_dictionary['access_point']['wifi_password'])
-    print('essid:', ap.config('essid'))
-    print("password: ", wifi_settings_dictionary['access_point']['wifi_password'])
-    print('channel:', ap.config('channel'))
-    print('hidden:', ap.config('hidden'))
+    # print('essid:', ap.config('essid'))
+    # print("password: ", wifi_settings_dictionary['access_point']['wifi_password'])
+    # print('channel:', ap.config('channel'))
+    # print('hidden:', ap.config('hidden'))
 
     while ap.active() is False:
         pass
 
-    print('AP creation successful and Broadcasting')
-    print(ap.ifconfig())
+    # print('AP creation successful and Broadcasting')
+    # print(ap.ifconfig())
 
     placeholder = 'placeholder'
 
@@ -1154,7 +1153,7 @@ else:  # access_point
                     for the_tuple in locale_q_pairs:
                         if the_tuple[0][0:2] not in html_language_list:
                             html_language_list.append(the_tuple[0][0:2])
-                    print('language_list:', html_language_list)
+                    # print('language_list:', html_language_list)
 
             language_dictionary_html = {}
             language_html_code = 'en'
@@ -1188,7 +1187,7 @@ else:  # access_point
             param_request_dictionary = {}
             if language_dictionary_html:
                 get_request_list = request_list[1].split('?')
-                print('get request list: ', get_request_list)
+                # print('get request list: ', get_request_list)
 
                 file_request = get_request_list[0].lstrip('/')
                 # print('file request: ', file_request)
@@ -1200,7 +1199,7 @@ else:  # access_point
                         # assigning keys with values
                         param_request_dictionary[key] = value
 
-                print('param_request_dictionary: ', param_request_dictionary)
+                # print('param_request_dictionary: ', param_request_dictionary)
 
                 # what to send client based on request
                 if file_request == '' or file_request == 'wifi-static' or file_request == 'wifi-dhcp' or file_request == 'wifi-scan' or file_request == 'wifi-apply' or file_request == 'sensor-apply' or file_request == 'test-connection':
@@ -1425,7 +1424,6 @@ else:  # access_point
                     if 'refresh_third_tab' in param_request_dictionary or third_tab_access_point_machine_reset:
                         if third_tab_access_point_machine_reset:
                             meta_refresh = '<meta http-equiv="refresh" content="30; url=/#third-tab"/>'
-                            print('content=30')
                         else:
                             # header = 'HTTP/1.1 303 See Other\nLocation: /#third-tab\nContent-Type: text/html\nConnection: close\n\n'
                             meta_refresh = '<meta http-equiv="refresh" content="0; url=/#third-tab"/>'
@@ -1447,7 +1445,6 @@ else:  # access_point
                             dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
                             print('Updated wifi_settings.json')
                             print('{0}'.format(wifi_settings_dictionary))
-                            print('content=30')
 
                         html_content_data = '{0}&#13;&#10;{1}&#13;&#10;{2}%&#13;&#10;{3}%&#13;&#10;'.format(
                             language_dictionary_html["Disconnecting_WiFi_access_point"],  # {0}
