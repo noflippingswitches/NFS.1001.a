@@ -159,7 +159,7 @@ def ds18b20(ds18b20_serial_number):
             if ds18b20_NEG_55C_POS_125C_Exception_count == 10:
                 temp = 998
                 break
-            ds18b20_85C_Exception_count += 1
+            ds18b20_NEG_55C_POS_125C_Exception_count += 1
         except ds18b20_not_int_float_Exception as e:
             print('Error: {0}'.format(e))
             print('attempt {0} of 10'.format(ds18b20_not_int_float_Exception_count))
