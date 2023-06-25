@@ -601,7 +601,7 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
     else:
         # interval is 1, so just add one to the list
-        rtc_memory_list = [int(tempC_internal[1] * 10000)]
+        rtc_memory_list.append(int(tempC_internal[1] * 10000))
 
         # Reverse list and re-float all items in list
         rtc_memory_reversed_list = list([items / 10000 for items in reversed(rtc_memory_list)])
