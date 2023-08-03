@@ -1,3 +1,5 @@
+# DS18b20
+
 # Copyright (c) 2023 One DB Ventures, LLC (AKA, No Flipping Switches)
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -24,6 +26,7 @@ import time
 start_time_ticks_ms = time.ticks_ms()
 time_corection_offset = 2000  # mesured at 70deg.F
 import usocket as socket
+# noinspection PyUnresolvedReferences
 import umqtt.simple
 # import esp32
 import machine
@@ -99,7 +102,7 @@ def batt():
     # Calculate voltage from microvolts to volts
     volts_after_divider = microvolts_after_divider / 1000000
     # convert to original voltage before voltage divider
-    volts = volts_after_divider * 1.523809524  # Voltage In = Voltage Out * (R1+R2/R2) R1=1.1Kohms R2=2.1Kohms
+    volts = round((volts_after_divider * 1.523809524), 2)  # Voltage In = Voltage Out * (R1+R2/R2) R1=1.1Kohms R2=2.1Kohms
 
     # Calculate estimated battery percentage remaining, also keep from going past 100% or under 0%
     remaining_percent = int(100 * (volts - Constant_battery_min_voltage) / (Constant_battery_max_voltage - Constant_battery_min_voltage))  # 100 * (adc_volts - BATTERY_MIN_ADC) / (BATTERY_MAX_ADC - BATTERY_MIN_ADC)
@@ -293,7 +296,7 @@ def wifi_client_scan():  # returns wifi_client_scan_formatted
 # [Static]
 # Battery - Min and Max voltage range
 Constant_battery_min_voltage = const(3.025)
-Constant_battery_max_voltage = const(3.425)
+Constant_battery_max_voltage = const(3.475)
 # Battery - Pin used to supply gpio (+) voltage to voltage divider resister 1.1kohms
 Constant_batt_gpio_pos_volts_supply_pin = const(11)
 # Battery - Pin used for taking analog voltage
@@ -1021,7 +1024,7 @@ else:  # access_point
             else:
                 wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'])
 
-            # print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
+            print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
             while wifi_station.status() == network.STAT_CONNECTING:
                 pass
             # get status after while loop finishes
@@ -1029,7 +1032,7 @@ else:  # access_point
             if status == 'STAT_GOT_IP: connection successful':
                 html_wifi_connection_status = 'connection_successful'
             # print(html_wifi_connection_status)
-            # print(str(status))
+            print(str(status))
 
         # We have connected to the wifi, do stuff
         if wifi_station.isconnected():
@@ -1041,7 +1044,7 @@ else:  # access_point
             dns_server_html = ifconfig[3]
             hostname_html = wifi_station.config('hostname')
             ssid_html = wifi_station.config('ssid')
-            # print('Connected to: {0}'.format(ssid))
+            print('Connected to: {0}'.format(ssid_html))
 
             data_out_dictionary = {
                 device_settings_dictionary['unique_id']: {
@@ -1096,14 +1099,14 @@ else:  # access_point
                     mqttc.publish(topic_byte, msg_byte, retain=False, qos=1)
                     mqttc.disconnect()
                     html_mqtt_connection_status = 'mqtt_connection_successful'
-                    # print('mqtt connection successful')
+                    print('mqtt connection successful')
                     break
                 except Exception as e:
                     if while_loop_counter == 5:
                         html_mqtt_connection_status = 'mqtt_unable_to_connect_check_mqtt_settings_or_internet_connection'
                         break
                     while_loop_counter += 1
-                    # print('mqtt failed')
+                    print('mqtt failed')
 
         wifi_station.disconnect()
         wifi_station.active(False)
@@ -1135,8 +1138,8 @@ else:  # access_point
     while ap.active() is False:
         pass
 
-    # print('AP creation successful and Broadcasting')
-    # print(ap.ifconfig())
+    print('AP creation successful and Broadcasting')
+    print(ap.ifconfig())
 
     placeholder = 'placeholder'
 
@@ -1264,10 +1267,21 @@ else:  # access_point
                                 "dns_server": param_request_dictionary['dns']
                             }
                         else:
-                            wifi_settings_dictionary['known_wifi'] = {
-                                "wifi_ssid": param_request_dictionary['ssid'],
-                                "wifi_password": param_request_dictionary['password']
-                            }
+                            if 'password' in param_request_dictionary:
+                                if param_request_dictionary['password'] == '':
+                                    wifi_settings_dictionary['known_wifi'] = {
+                                        "wifi_ssid": param_request_dictionary['ssid']
+                                    }
+                                else:
+                                    wifi_settings_dictionary['known_wifi'] = {
+                                        "wifi_ssid": param_request_dictionary['ssid'],
+                                        "wifi_password": param_request_dictionary['password']
+                                    }
+                            else:
+                                wifi_settings_dictionary['known_wifi'] = {
+                                    "wifi_ssid": param_request_dictionary['ssid']
+                                }
+
                         dictionary_to_json(wifi_settings_dictionary, 'wifi_settings.json')
                         print('Updated wifi_settings.json')
                         print('{0}'.format(wifi_settings_dictionary))
@@ -1317,11 +1331,14 @@ else:  # access_point
 
                     if 'wifi_ssid' in wifi_settings_dictionary['known_wifi']:
                         ssid_html_input_vlaue = '<input type="text" name="ssid" value="{0}" required>'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid'])
-                        password_html_input_vlaue = '<input type="password" name="password" value="{0}" required>'.format(wifi_settings_dictionary['known_wifi']['wifi_password'])
+                        if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
+                            password_html_input_vlaue = '<input type="password" name="password" placeholder="{0} *">'.format(language_dictionary_html["Password"])
+                        else:
+                            password_html_input_vlaue = '<input type="password" name="password" value="{0}">'.format(wifi_settings_dictionary['known_wifi']['wifi_password'])
 
                     else:
                         ssid_html_input_vlaue = '<input type="text" name="ssid" placeholder="{0} *" required>'.format(language_dictionary_html["SSID_Network_Name"])
-                        password_html_input_vlaue = '<input type="password" name="password" placeholder="{0} *" required>'.format(language_dictionary_html["Password"])
+                        password_html_input_vlaue = '<input type="password" name="password" placeholder="{0} *">'.format(language_dictionary_html["Password"])
 
                     html_content_wifi = '<form action="/#first-tab" method="GET"><legend><input type="hidden"/><button class="dhcpButton" formaction="/wifi-static#first-tab"><span>{0}</span></button></legend></form><form action="/wifi-apply#first-tab" method="GET">{1}{2}'.format(
                         language_dictionary_html["DHCP"],  # {0}
@@ -1355,6 +1372,7 @@ else:  # access_point
 
                     # -=[ second-tab, Sensor }=-
                     # get/format sensor information for html
+                    tempC_internal_ap = ds18b20(device_settings_dictionary["ds18b20_sn"])
                     sensor_info_html = '{3} °C: {0}&#13;&#10;{4} V: {1}&#13;&#10;{4} %: {2}&#13;&#10;'.format(
                         tempC_internal_ap[1],
                         batt_result_ap[0],
@@ -1376,16 +1394,16 @@ else:  # access_point
                         else:
                             record_data_interval = int(param_request_dictionary['record_every_int'])
                         # protect deepsleep from overflow
-                        if record_data_interval > 31536000000:
-                            record_data_interval = 31536000000
+                        if record_data_interval > 525600:
+                            record_data_interval = 525600
 
                         if param_request_dictionary['send_every_min_hr'] == 'hours':
                             send_data_interval = 60 * int(param_request_dictionary['send_every_int'])
                         else:
                             send_data_interval = int(param_request_dictionary['send_every_int'])
                         # protect deepsleep from overflow
-                        if record_data_interval > 31536000000:
-                            record_data_interval = 31536000000
+                        if record_data_interval > 525600:
+                            record_data_interval = 525600
 
                         interval_list_length = int(send_data_interval / record_data_interval)
                         if interval_list_length <= 1:
@@ -1484,7 +1502,7 @@ else:  # access_point
                             print('Updated wifi_settings.json')
                             print('{0}'.format(wifi_settings_dictionary))
 
-                        html_content_data = '{0}&#13;&#10;{1}&#13;&#10;{2}%&#13;&#10;{3}%&#13;&#10;'.format(
+                        html_content_data = '{0}&#13;&#10;{1}&#13;&#10;{2}&#13;&#10;{3}&#13;&#10;'.format(
                             language_dictionary_html["Disconnecting_WiFi_access_point"],  # {0}
                             language_dictionary_html["Webpage_will_automatically_refresh"],  # {1}
                             language_dictionary_html["Please_wait_x_seconds"],  # {2}
@@ -1502,7 +1520,7 @@ else:  # access_point
                         html_static_style
                     )
                     html_head_end = '</head>'
-                    html_body = '<body><main><section class="tab" id="third-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab" class="active">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/test-connection#third-tab" method="GET"><fieldset><input type="hidden" name="refresh_third_tab" value="True"/><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="test_connection_output" disabled>{15}</textarea><br><br><label for="mqtt_address" style="font-size:20px">MQTT URL/IP:</label><input type="text" id="mqtt_address" name="mqtt_address" minlength="1" maxlength="2048" value="{17}" required>{18}<br><br><input type="submit" value="{16}" /></fieldset></form></div></div></section><section class="tab" id="second-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab" class="active">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/#second-tab" method="GET"><fieldset><legend><input type="hidden" name="refresh_second_tab" value="True"/><button class="scanButton"><span>{1}</span></button></legend><textarea rows="3" style="white-space: pre; overflow: scroll; resize: vertical; width: 100%;" wrap="off" name="scanned_sensors" disabled>{8}</textarea></form><form action="/sensor-apply#second-tab" method="GET"><label for="take_reading" style="font-size:20px">{9}:</label><input type="number" min="0" max="31536000000" name="record_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;"value="{13}" required><select id="take_reading" name="record_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><label for="send_reading" style="font-size:20px">{10}:</label><input type="number" min="0" max="31536000000" name="send_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;" value="{14}" required><select id="send_reading" name="send_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section><section class="tab" id="first-tab"><nav><a href="#first-tab" class="active">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/{7}#first-tab" method="GET"><fieldset><legend><input type="hidden" name="scan" value="True"/><button class="scanButton"><span>{3}</span></button></legend><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="scanned_networks" disabled>{4}</textarea></form>{5}<br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section></main></body>'.format(
+                    html_body = '<body><main><section class="tab" id="third-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab" class="active">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/test-connection#third-tab" method="GET"><fieldset><input type="hidden" name="refresh_third_tab" value="True"/><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="test_connection_output" disabled>{15}</textarea><br><br><label for="mqtt_address" style="font-size:20px">MQTT URL/IP:</label><input type="text" id="mqtt_address" name="mqtt_address" minlength="1" maxlength="2048" value="{17}" required>{18}<br><br><input type="submit" value="{16}" /></fieldset></form></div></div></section><section class="tab" id="second-tab"><nav><a href="#first-tab">{0}</a><a href="#second-tab" class="active">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/#second-tab" method="GET"><fieldset><legend><input type="hidden" name="refresh_second_tab" value="True"/><button class="scanButton"><span>{1}</span></button></legend><textarea rows="3" style="white-space: pre; overflow: scroll; resize: vertical; width: 100%;" wrap="off" name="scanned_sensors" disabled>{8}</textarea></form><form action="/sensor-apply#second-tab" method="GET"><label for="take_reading" style="font-size:20px">{9}:</label><input type="number" min="0" max="525600" name="record_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;"value="{13}" required><select id="take_reading" name="record_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><label for="send_reading" style="font-size:20px">{10}:</label><input type="number" min="0" max="525600" name="send_every_int" style="width:135px;text-align:right;direction: rtl;height:38px;" value="{14}" required><select id="send_reading" name="send_every_min_hr" style="width:120px;text-align:left;height:38px;"><option value="minutes">{11}</option><option value="hours">{12}</option></select><br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section><section class="tab" id="first-tab"><nav><a href="#first-tab" class="active">{0}</a><a href="#second-tab">{1}</a><a href="#third-tab">{2}</a></nav><div class="tab-box"><div class="form-style-5"><form action="/{7}#first-tab" method="GET"><fieldset><legend><input type="hidden" name="scan" value="True"/><button class="scanButton"><span>{3}</span></button></legend><textarea rows="4" style="white-space: pre; overflow: scroll; resize: vertical;" wrap="off" name="scanned_networks" disabled>{4}</textarea></form>{5}<br><br><input type="submit" value="{6}" /></fieldset></form></div></div></section></main></body>'.format(
                         language_dictionary_html["WiFi"],  # {0}
                         language_dictionary_html["Sensor"],  # {1}
                         language_dictionary_html["Data"],  # {2}
