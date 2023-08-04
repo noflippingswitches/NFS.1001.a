@@ -242,8 +242,10 @@ def wifi_client_scan():  # returns wifi_client_scan_formatted
     wifi_client.active(True)
     # give wi-fi time to come up
     time.sleep_ms(250)
+
     # noinspection PyShadowingNames
     try:
+        # noinspection PyShadowingNames
         wifi_client_scan_raw = wifi_client.scan()
         # disconnect after scan
         wifi_client.active(False)
@@ -254,6 +256,7 @@ def wifi_client_scan():  # returns wifi_client_scan_formatted
             wifi_client.active(False)
         # give wi-fi time to go down
         time.sleep_ms(250)
+
     except Exception as e:
         print('Error: {0}'.format(e))
         print('wifi_client_scan_raw')
@@ -290,7 +293,7 @@ def wifi_client_scan():  # returns wifi_client_scan_formatted
 
             wifi_client_scan_formatted.append((scan_ssid, scan_bssid, scan_channel, scan_rssi, scan_security_to_readable_string))
 
-    return wifi_client_scan_formatted
+    return wifi_client_scan_formatted, wifi_client_scan_raw
 
 
 # [Static]
@@ -635,7 +638,7 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
 
     # how many attemps to connect to this network/ssid. will try # of times if good conection is lost NOTE: call them one at a time else jams up
     wifi_station.config(hostname=device_settings_dictionary['unique_id'])
-    wifi_station.config(reconnects=5)
+    wifi_station.config(reconnects=1)
 
     # NOTE: anoying you cannot unassign static values for ifconfig, you must reset device. rather try dhcp networks first.
     # NOTE: if a ssid had a password and now does not the last 5 values are cashed. user must change the ssid for network on thier router/device! Gerrr.
@@ -661,14 +664,43 @@ if station_or_access_point_startup_value == 0:  # station 0 jumper bridged/conne
             # IMPORTANT! feed the watchdog before trying to connect to Wi-Fi ssid
             wdt.feed()  # feed the watchdog timmer
 
+            wifi_client_scan_raw = False
+            # noinspection PyShadowingNames
+            try:
+                wifi_client_scan_raw = wifi_station.scan()
+                # print('wifi_client_scan_raw: {0}'.format(wifi_client_scan_raw))
+            except Exception as e:
+                print('Error: {0}'.format(e))
+                print('Unable to scan wifi networks')
+
+            bssid = None
+            # Scan wifi networks to get bssid with the highest signal, as wifi will connect to first random ssid/bssid even if it's not the best signal.
+            if wifi_client_scan_raw:
+                wifi_scan_sorted = sorted(wifi_client_scan_raw, key=lambda x: -x[3])  # sorts by fourth element in wifi tuple (rssi) signal strength.
+                # print('wifi_scan_sorted: {0}'.format(wifi_scan_sorted))
+
+                for ssid in wifi_scan_sorted:
+                    # noinspection PyUnresolvedReferences
+                    individual_ssid = str(ssid[0].decode('UTF-8'))
+                    # print('individual_ssid: {0}'.format(individual_ssid))
+                    if individual_ssid == wifi_settings_dictionary['known_wifi']['wifi_ssid']:
+                        bssid = ssid[1]
+                        # print('bssid: {0}'.format(bssid))
+                        break
+
+            wdt.feed()  # feed the watchdog timmer
+
             if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
-                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'])
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], bssid=bssid)
             else:
-                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'])
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'], bssid=bssid)
 
             # print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
+            wifi_time_ticks_ms = time.ticks_ms()
             while wifi_station.status() == network.STAT_CONNECTING:
-                pass
+                if time.ticks_diff(time.ticks_ms(), wifi_time_ticks_ms) > 15000:
+                    wifi_station.disconnect()
+                    print("Timeout. Could not connect.")
             # get status after while loop finishes
             status = wifi_connection_status(wifi_station.status())
             # print(str(status))
@@ -983,7 +1015,7 @@ else:  # access_point
     batt_result_ap = batt()
 
     # scan for Wi-Fi networks and get best channel to use for Access Point
-    ap_client_scan = wifi_client_scan()
+    ap_client_scan, ap_client_scan_raw = wifi_client_scan()
     # print('ap_client_scan: ', ap_client_scan)
 
     # check connection to mqtt
@@ -1017,16 +1049,34 @@ else:  # access_point
         # NOTE: anoying you cannot unassign static values for ifconfig, you must reset device. rather try dhcp networks first.
         # NOTE: if a ssid had a password and now does not the last 5 values are cashed. user must change the ssid for network on thier router/device! Gerrr.
 
+        bssid = None
+        # Scan wifi networks to get bssid with the highest signal, as wifi will connect to first random ssid/bssid even if it's not the best signal.
+        if ap_client_scan_raw:
+            ap_client_scan_sorted = sorted(ap_client_scan_raw, key=lambda x: -x[3])  # sorts by fourth element in wifi tuple (rssi) signal strength.
+            print('ap_client_scan_sorted: {0}'.format(ap_client_scan_sorted))
+
+            for ssid in ap_client_scan_sorted:
+                # noinspection PyUnresolvedReferences
+                individual_ssid = str(ssid[0].decode('UTF-8'))
+                print('individual_ssid: {0}'.format(individual_ssid))
+                if individual_ssid == wifi_settings_dictionary['known_wifi']['wifi_ssid']:
+                    bssid = ssid[1]
+                    print('bssid: {0}'.format(bssid))
+                    break
+
         # make sure we are not connected
         if not wifi_station.isconnected():
             if 'wifi_password' not in wifi_settings_dictionary['known_wifi']:
-                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'])
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], bssid=bssid)
             else:
-                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'])
+                wifi_station.connect(wifi_settings_dictionary['known_wifi']['wifi_ssid'], wifi_settings_dictionary['known_wifi']['wifi_password'], bssid=bssid)
 
             print('Trying to Connect to: {0}'.format(wifi_settings_dictionary['known_wifi']['wifi_ssid']))
+            wifi_time_ticks_ms = time.ticks_ms()
             while wifi_station.status() == network.STAT_CONNECTING:
-                pass
+                if time.ticks_diff(time.ticks_ms(), wifi_time_ticks_ms) > 15000:
+                    wifi_station.disconnect()
+                    print("Timeout. Could not connect.")
             # get status after while loop finishes
             status = wifi_connection_status(wifi_station.status())
             if status == 'STAT_GOT_IP: connection successful':
